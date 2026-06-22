@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task Manager - Group Collaboration</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- Login Page -->
+    <div id="loginPage" class="page">
+      <div class="login-container">
+        <h1>Task Manager</h1>
+        <p class="subtitle">Collaborate and manage tasks with your team</p>
+        <button id="googleLoginBtn" class="btn primary-btn" style="width: 100%;">Login with Google</button>
+      </div>
+    </div>
+
+    <!-- Group Selection Page -->
+    <div id="groupSelectionPage" class="page hidden">
+      <div class="login-container" style="max-width: 600px;">
+        <h1>Select a Group</h1>
+        <p class="subtitle">Choose a group to continue</p>
+        <div class="input-group">
+          <input type="text" id="groupSearch" placeholder="Search groups..." style="margin-bottom: 1rem;">
+        </div>
+        <div id="groupsList" class="groups-list"></div>
+        <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+          <button id="createNewGroupBtn" class="btn secondary-btn" style="flex:1;">Create New Group</button>
+          <button id="backToLoginFromGroups" class="btn secondary-btn" style="flex:1;">Logout</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create Group Page -->
+    <div id="createGroupPage" class="page hidden">
+      <div class="login-container">
+        <h1>Create New Group</h1>
+        <div class="input-group">
+          <label for="newGroupName">Group Name</label>
+          <input type="text" id="newGroupName" placeholder="Enter group name">
+        </div>
+        <div class="input-group">
+          <label for="adminName">Your Name</label>
+          <input type="text" id="adminName" placeholder="Enter your name">
+        </div>
+        <div class="input-group">
+          <label for="adminPosition">Your Position</label>
+          <input type="text" id="adminPosition" placeholder="Enter your position">
+        </div>
+        <button id="createGroupBtn" class="btn primary-btn" style="width:100%; margin-bottom: 1rem;">Create Group</button>
+        <button id="backToGroupSelection" class="btn secondary-btn" style="width:100%;">Back to Groups</button>
+      </div>
+    </div>
+
+    <!-- Main Dashboard -->
+    <div id="dashboardPage" class="page hidden">
+      <nav class="navbar">
+        <div class="nav-left">
+          <h2 id="navGroupName">Group Name</h2>
+        </div>
+        <div class="nav-right">
+          <div class="user-profile" id="userProfile">
+            <div class="user-avatar" id="userAvatar"></div>
+            <div class="user-info-nav">
+              <div class="user-name" id="navUserName">User</div>
+              <div class="user-email" id="navUserEmail"></div>
+            </div>
+          </div>
+          <div class="dropdown-menu hidden" id="dropdownMenu">
+            <div class="dropdown-item" id="changeGroupBtn">Change Group</div>
+            <div class="dropdown-item danger" id="logoutBtn">Logout</div>
+          </div>
+        </div>
+      </nav>
+
+      <div class="container">
+        <aside class="sidebar">
+          <button class="nav-item active" data-section="dashboard">Dashboard</button>
+          <button class="nav-item" data-section="tasks">Tasks</button>
+          <button class="nav-item" data-section="issues">Issues</button>
+          <button class="nav-item" data-section="notifications">
+            Notifications
+            <span id="notificationBadge" class="notification-badge hidden">0</span>
+          </button>
+          <button id="adminNavUsers" class="nav-item hidden" data-section="users">Users</button>
+        </aside>
+
+        <main class="main-content">
+          <!-- Dashboard Section -->
+          <section id="dashboardSection" class="section">
+            <h2>Dashboard</h2>
+            
+            <!-- Tasks Metrics -->
+            <div class="dashboard-section">
+              <h3>Tasks</h3>
+              <div id="tasksMetricsGrid" class="metrics-grid"></div>
+            </div>
+            
+            <!-- Issues Metrics -->
+            <div class="dashboard-section">
+              <h3>Issues</h3>
+              <div id="issuesMetricsGrid" class="metrics-grid"></div>
+            </div>
+          </section>
+
+          <!-- Tasks Section -->
+          <section id="tasksSection" class="section hidden">
+            <div class="section-header">
+              <h2>Tasks</h2>
+              <button id="createTaskBtn" class="btn primary-btn hidden">Create New Task</button>
+            </div>
+            <div class="search-filter-bar">
+              
+              <div class="filter-row">
+			  <input type="text" class="search-input" id="taskSearch" placeholder="Search tasks by ID, description...">
+                <select id="taskStatusFilter">
+                  <option value="">All Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="accepted">Accepted</option>
+                  <option value="work_in_progress">Work in Progress</option>
+                  <option value="partially_completed">Partially Completed</option>
+                  <option value="completed">Completed</option>
+                  <option value="closed">Closed</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+                <select id="taskPrimaryFilter">
+                  <option value="">All Primary Users</option>
+                </select>
+                <select id="taskSecondaryFilter">
+                  <option value="">All Secondary Users</option>
+                </select>
+                <input type="date" id="taskDateFilter" placeholder="Assigned Date">
+              </div>
+            </div>
+            <div class="active-filters-container">
+              <div class="active-filters-header">
+                <span class="filters-count">Filters (0)</span>
+                <button id="clearAllFiltersBtn" class="clear-all-filters-btn">Clear All</button>
+              </div>
+              <div id="activeFiltersList" class="active-filters-list">
+                <div class="no-active-filters">No active filters</div>
+              </div>
+            </div>
+            <div class="task-tabs">
+              <button class="tab-btn active" data-tab="all">All Tasks</button>
+              <button class="tab-btn" data-tab="primary">Primary Tasks</button>
+              <button class="tab-btn" data-tab="secondary">Secondary Tasks</button>
+            </div>
+            <div id="tasksList" class="tasks-list"></div>
+          </section>
+
+          <!-- Issues Section -->
+          <section id="issuesSection" class="section hidden">
+            <div class="section-header">
+              <h2>Issues</h2>
+              <button id="createIssueBtn" class="btn primary-btn">Report Issue</button>
+            </div>
+            <div class="search-filter-bar">
+              
+              <div class="filter-row">
+			  <input type="text" class="search-input" id="issueSearch" placeholder="Search issues by description...">
+                <select id="issueStatusFilter">
+                  <option value="">All Status</option>
+                  <option value="open">Open</option>
+                  <option value="converted">Converted to Task</option>
+                </select>
+                <select id="issueReportedByFilter">
+                  <option value="">All Reporters</option>
+                </select>
+                <input type="date" id="issueDateFilter" placeholder="Reported Date">
+              </div>
+            </div>
+            <div class="active-filters-container">
+              <div class="active-filters-header">
+                <span class="filters-count" id="issueFiltersCount">Filters (0)</span>
+                <button id="clearAllIssueFiltersBtn" class="clear-all-filters-btn">Clear All</button>
+              </div>
+              <div id="activeIssueFiltersList" class="active-filters-list">
+                <div class="no-active-filters">No active filters</div>
+              </div>
+            </div>
+            <div id="issuesList" class="issues-list"></div>
+          </section>
+
+          <!-- Notifications Section -->
+          <section id="notificationsSection" class="section hidden">
+            <div class="section-header">
+              <h2>Notifications</h2>
+              <button id="clearNotificationsBtn" class="btn secondary-btn">Clear All</button>
+            </div>
+            <div id="notificationsList" class="notifications-list"></div>
+          </section>
+          
+          <!-- Users Section (Admin Only) -->
+          <section id="usersSection" class="section hidden">
+            <div class="section-header">
+              <h2>Users</h2>
+              <button id="inviteUserBtn" class="btn primary-btn">Invite User</button>
+            </div>
+            
+            <!-- Admin Users -->
+            <div class="user-management-section">
+              <h3>Admins</h3>
+              <div id="adminsList" class="users-grid"></div>
+            </div>
+            
+            <!-- Invited Users -->
+            <div class="user-management-section">
+              <h3>Team Members</h3>
+              <div id="invitedUsersList" class="users-grid"></div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modals -->
+  <div id="taskModal" class="modal hidden">
+    <div class="modal-content">
+      <span class="close-btn">&times;</span>
+      <h3 id="taskModalTitle">Create New Task</h3>
+      <form id="taskForm">
+        <div class="input-group">
+          <label for="taskId">Task ID</label>
+          <input type="text" id="taskId" required placeholder="Unique task ID">
+        </div>
+        <div class="input-group">
+          <label for="taskDescription">Description</label>
+          <textarea id="taskDescription" rows="4" required placeholder="Task description"></textarea>
+        </div>
+        <div class="form-row">
+          <div class="input-group">
+            <label for="taskPrimary">Primary User</label>
+            <select id="taskPrimary" required>
+              <option value="">Select Primary User</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label for="taskSecondary">Secondary User</label>
+            <select id="taskSecondary">
+              <option value="">Select Secondary User (Optional)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="input-group">
+            <label for="taskDuration">Duration (days)</label>
+            <input type="number" id="taskDuration" min="1" required placeholder="e.g., 7">
+          </div>
+          <div class="input-group">
+            <label for="taskRemarks">Remarks</label>
+            <input type="text" id="taskRemarks" placeholder="Additional notes">
+          </div>
+        </div>
+        <button type="submit" class="btn primary-btn" style="width: 100%;">Save Task</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="viewTaskModal" class="modal hidden">
+    <div class="modal-content large-modal">
+      <span class="close-btn">&times;</span>
+      <div id="viewTaskContent"></div>
+    </div>
+  </div>
+
+  <div id="inviteUserModal" class="modal hidden">
+    <div class="modal-content">
+      <span class="close-btn">&times;</span>
+      <h3>Invite User</h3>
+      <form id="inviteUserForm">
+        <div class="input-group">
+          <label for="inviteEmail">Email</label>
+          <input type="email" id="inviteEmail" required placeholder="user@example.com">
+        </div>
+        <div class="input-group">
+          <label for="inviteName">Name</label>
+          <input type="text" id="inviteName" required placeholder="User Name">
+        </div>
+        <div class="input-group">
+          <label for="invitePosition">Position</label>
+          <input type="text" id="invitePosition" required placeholder="User Position">
+        </div>
+        <button type="submit" class="btn primary-btn" style="width: 100%;">Invite</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="issueModal" class="modal hidden">
+    <div class="modal-content">
+      <span class="close-btn">&times;</span>
+      <h3>Report Issue</h3>
+      <form id="issueForm">
+        <div class="input-group">
+          <label for="issueDescription">Description</label>
+          <textarea id="issueDescription" rows="4" required placeholder="Describe the issue"></textarea>
+        </div>
+        <div class="input-group">
+          <label for="issueObtainedFrom">Obtained From</label>
+          <input type="text" id="issueObtainedFrom" required placeholder="Where the issue was found">
+        </div>
+        <div class="input-group">
+          <label for="issueMitigation">Suggested Mitigation</label>
+          <textarea id="issueMitigation" rows="3" placeholder="Suggested solution"></textarea>
+        </div>
+        <div class="input-group">
+          <label for="issueRemarks">Remarks</label>
+          <input type="text" id="issueRemarks" placeholder="Additional notes">
+        </div>
+        <button type="submit" class="btn primary-btn" style="width: 100%;">Submit Issue</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
