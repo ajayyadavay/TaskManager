@@ -196,13 +196,46 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
               <h2>Deadline</h2>
             </div>
             <div class="deadline-filter-panel">
-              <div class="input-group">
-                <label for="deadlineDaysFilter">Show Tasks Ending In</label>
-                <input type="number" id="deadlineDaysFilter" value="0" placeholder="Enter days">
-              </div>
-              <p class="deadline-filter-help">Use `0` for today, `1` for tomorrow, and any negative number (e.g. -1) for overdue unfinished tasks.</p>
-              <p id="deadlineSummary" class="deadline-summary">Showing tasks whose deadline ends today.</p>
-            </div>
+
+  <div class="deadline-operator-group">
+    <button class="deadline-op-btn active" data-op="=">=</button>
+    <button class="deadline-op-btn" data-op="<">&lt;</button>
+    <button class="deadline-op-btn" data-op="<=">&le;</button>
+    <button class="deadline-op-btn" data-op=">">&gt;</button>
+    <button class="deadline-op-btn" data-op=">=">&ge;</button>
+
+    <div class="input-group">
+    <input
+      type="number"
+      id="deadlineDaysFilter"
+      value="0"
+      placeholder="Enter days">
+      <label for="deadlineDaysFilter">Days</label>
+  </div>
+
+  </div>
+
+  <!--
+  <div class="input-group">
+    <input
+      type="number"
+      id="deadlineDaysFilter"
+      value="0"
+      placeholder="Enter days">
+      <label for="deadlineDaysFilter">Days</label>
+  </div>
+-->
+
+  <p class="deadline-filter-help">
+    Examples:
+    = 3 → exactly 3 days,
+    <= 3 → within 3 days,
+    < 0 → overdue tasks
+  </p>
+
+  <p id="deadlineSummary" class="deadline-summary"></p>
+
+</div>
             <div id="deadlinesList" class="tasks-list"></div>
           </section>
 

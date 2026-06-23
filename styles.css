@@ -147,7 +147,7 @@ body {
 }
 
 .input-group label {
-  display: block;
+  display: flex;
   margin-bottom: var(--space-2);
   font-size: 0.875rem;
   font-weight: 500;
@@ -1563,19 +1563,32 @@ body {
   color:#f59e0b;
 }
 
-/*New donught style dashboard
-.donut-progress{
-  stroke:#ef4444;
+/*deadline operator button*/
+.deadline-operator-group{
+  display:flex;
+  gap:8px;
+  margin-bottom:16px;
+  flex-wrap:wrap;
 }
 
-.donut-percent{
-  color:#ef4444;
-  font-size:4rem;
-  font-weight:800;
-}
-
-.donut-label{
-  color:#ef4444;
-  font-size:1.5rem;
+.deadline-op-btn{
+  min-width:52px;
+  height:42px;
+  border:none;
+  border-radius:12px;
+  background:#f3f4f6;
+  color:#374151;
   font-weight:700;
-}*/
+  cursor:pointer;
+  transition:.2s;
+}
+
+.deadline-op-btn:hover{
+  background:#e5e7eb;
+}
+
+.deadline-op-btn.active{
+  background:var(--primary-500);
+  color:#fff;
+  box-shadow:0 4px 12px rgba(59,130,246,.25);
+}

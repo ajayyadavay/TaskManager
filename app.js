@@ -23,6 +23,7 @@ let usersCache = [];
 let currentUserData = null;
 let tasksCache = [];
 let issuesCache = [];
+let deadlineOperator = '=';
 
 const FINISHED_TASK_STATUSES = new Set(['completed', 'closed', 'rejected']);
 
@@ -175,6 +176,27 @@ function setupEventListeners() {
       loadDeadlineTasks();
     });
   }
+
+  //Run once for deadline operator buttons
+   // existing listeners
+  document.getElementById('deadlineDaysFilter')
+    ?.addEventListener('input', loadDeadlineTasks);
+
+  // deadline operator buttons
+  document.querySelectorAll('.deadline-op-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+
+      document
+        .querySelectorAll('.deadline-op-btn')
+        .forEach(b => b.classList.remove('active'));
+
+      btn.classList.add('active');
+
+      deadlineOperator = btn.dataset.op;
+
+      loadDeadlineTasks();
+    });
+  });
 }
 
 // Helper to clear all filters
@@ -1392,11 +1414,35 @@ function loadDeadlineTasks() {
     .filter(task => {
       const deadlineOffset = getTaskDeadlineOffset(task);
 
-      return deadlineOffset === daysValue && !isTaskFinished(task);
+      //return deadlineOffset === daysValue && !isTaskFinished(task);
+      if (isTaskFinished(task)) {
+  return false;
+}
+
+switch (deadlineOperator) {
+
+  case '=':
+    return deadlineOffset === daysValue;
+
+  case '<':
+    return deadlineOffset < daysValue;
+
+  case '<=':
+    return deadlineOffset <= daysValue;
+
+  case '>':
+    return deadlineOffset > daysValue;
+
+  case '>=':
+    return deadlineOffset >= daysValue;
+
+  default:
+    return deadlineOffset === daysValue;
+}
     })
     .sort((a, b) => a.deadline.localeCompare(b.deadline));
 
-  if (daysValue < 0) {
+  /*if (daysValue < 0) {
     deadlineSummary.textContent =
       `Showing tasks overdue by ${Math.abs(daysValue)} day(s) that are not completed.`;
   } else if (daysValue === 0) {
@@ -1405,7 +1451,17 @@ function loadDeadlineTasks() {
   } else {
     deadlineSummary.textContent =
       `Showing tasks whose deadline ends in ${daysValue} day(s).`;
-  }
+  }*/
+ const operatorLabels = {
+  '=': 'exactly',
+  '<': 'less than',
+  '<=': 'less than or equal to',
+  '>': 'greater than',
+  '>=': 'greater than or equal to'
+};
+
+deadlineSummary.textContent =
+  `Showing tasks with deadline offset ${operatorLabels[deadlineOperator]} ${daysValue} day(s).`;
 
   if (filteredTasks.length === 0) {
     deadlinesList.innerHTML = `
