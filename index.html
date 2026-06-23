@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Task Manager - Group Collaboration</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet"
+href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
@@ -82,6 +84,7 @@
         <aside class="sidebar">
           <button class="nav-item active" data-section="dashboard">Dashboard</button>
           <button class="nav-item" data-section="tasks">Tasks</button>
+          <button class="nav-item" data-section="deadlines">Deadline</button>
           <button class="nav-item" data-section="issues">Issues</button>
           <button class="nav-item" data-section="notifications">
             Notifications
@@ -96,10 +99,41 @@
             <h2>Dashboard</h2>
             
             <!-- Tasks Metrics -->
-            <div class="dashboard-section">
-              <h3>Tasks</h3>
-              <div id="tasksMetricsGrid" class="metrics-grid"></div>
-            </div>
+             <div class="dashboard-top-row">
+  <div class="dashboard-tasks-panel">
+    <h3>Task Overview</h3>
+    <div id="tasksMetricsGrid" class="metrics-grid"></div>
+  </div>
+
+  <div class="dashboard-chart-panel">
+    <h3>Closed Tasks</h3>
+
+    <div class="donut-chart">
+      <svg width="260" height="260" viewBox="0 0 220 220">
+        <circle
+          class="donut-bg"
+          cx="110"
+          cy="110"
+          r="85">
+        </circle>
+
+        <circle
+          id="closedDonutCircle"
+          class="donut-progress"
+          cx="110"
+          cy="110"
+          r="85">
+        </circle>
+      </svg>
+
+      <div class="donut-center">
+        <div id="closedPercent" class="donut-percent">0%</div>
+        <div class="donut-label">Closed</div>
+        <div id="closedRatio" class="donut-ratio">0 / 0 Tasks</div>
+      </div>
+    </div>
+  </div>
+</div>
             
             <!-- Issues Metrics -->
             <div class="dashboard-section">
@@ -117,7 +151,7 @@
             <div class="search-filter-bar">
               
               <div class="filter-row">
-			  <input type="text" class="search-input" id="taskSearch" placeholder="Search tasks by ID, description...">
+			          
                 <select id="taskStatusFilter">
                   <option value="">All Status</option>
                   <option value="pending">Pending</option>
@@ -135,6 +169,9 @@
                   <option value="">All Secondary Users</option>
                 </select>
                 <input type="date" id="taskDateFilter" placeholder="Assigned Date">
+                <input type="date" id="taskDeadlineFilter" placeholder="Deadline Date">
+                <input type="number" class="search-input" id="taskRemainingDaysFilter" placeholder="Remaining Days">
+                <input type="text" class="search-input" id="taskSearch" placeholder="Search tasks by ID, description...">
               </div>
             </div>
             <div class="active-filters-container">
@@ -152,6 +189,21 @@
               <button class="tab-btn" data-tab="secondary">Secondary Tasks</button>
             </div>
             <div id="tasksList" class="tasks-list"></div>
+          </section>
+
+          <section id="deadlinesSection" class="section hidden">
+            <div class="section-header">
+              <h2>Deadline</h2>
+            </div>
+            <div class="deadline-filter-panel">
+              <div class="input-group">
+                <label for="deadlineDaysFilter">Show Tasks Ending In</label>
+                <input type="number" id="deadlineDaysFilter" value="0" placeholder="Enter days">
+              </div>
+              <p class="deadline-filter-help">Use `0` for today, `1` for tomorrow, and any negative number (e.g. -1) for overdue unfinished tasks.</p>
+              <p id="deadlineSummary" class="deadline-summary">Showing tasks whose deadline ends today.</p>
+            </div>
+            <div id="deadlinesList" class="tasks-list"></div>
           </section>
 
           <!-- Issues Section -->

@@ -1108,6 +1108,37 @@ body {
   letter-spacing: 0.05em;
 }
 
+.deadline-filter-panel,
+.empty-state-card {
+  background: white;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-5);
+  margin-bottom: var(--space-5);
+}
+
+.deadline-filter-panel .input-group {
+  max-width: 280px;
+  margin-bottom: var(--space-3);
+}
+
+.deadline-filter-help {
+  color: var(--gray-500);
+  font-size: 0.875rem;
+  margin-bottom: var(--space-2);
+}
+
+.deadline-summary {
+  color: var(--gray-700);
+  font-weight: 500;
+}
+
+.empty-state-card {
+  text-align: center;
+  color: var(--gray-500);
+}
+
 /* for filter of Task */
 .search-filter-bar{
     display:flex;
@@ -1198,3 +1229,353 @@ body {
         width:100%;
     }
 }
+
+/* Assigned Date */
+#taskDateFilter {
+  border: 1px solid #22c55e;
+  accent-color: #22c55e;
+}
+
+/* Deadline Date */
+#taskDeadlineFilter {
+  border: 1px solid #ef4444;
+  accent-color: #ef4444;
+}
+
+/* Hover */
+#taskDateFilter:hover {
+  border-color: #16a34a;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15);
+}
+
+#taskDeadlineFilter:hover {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+}
+
+/* Focus */
+#taskDateFilter:focus {
+  outline: none;
+  border-color: #16a34a;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2);
+}
+
+#taskDeadlineFilter:focus {
+  outline: none;
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+}
+
+/* Modern dashboard */
+.dashboard-top-row {
+  display: grid;
+  grid-template-columns: 2fr 420px;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.dashboard-tasks-panel,
+.dashboard-chart-panel {
+  background: #fff;
+  border-radius: 24px;
+  padding: 24px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 10px 30px rgba(0,0,0,.05);
+}
+
+/*.dashboard-chart-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.donut-chart {
+  position: relative;
+  width: 260px;
+  height: 260px;
+  margin-top: 20px;
+}*/
+
+.dashboard-chart-panel {
+  min-height: 520px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.donut-chart {
+  width: 100%;
+  height: 100%;
+  max-width: 420px;
+  aspect-ratio: 1;
+  position: relative;
+}
+
+.donut-chart svg {
+  width: 100%;
+  height: 100%;
+}
+
+.donut-chart svg {
+  transform: rotate(-90deg);
+}
+
+.donut-bg {
+  fill: none;
+  stroke: #edf2f7;
+  stroke-width: 28;
+}
+
+.donut-progress {
+  fill: none;
+  stroke: #ef4444;
+  stroke-width: 28;
+  stroke-linecap: round;
+  transition: stroke-dashoffset .8s ease;
+}
+
+.donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.donut-percent {
+  font-size: 3rem;
+  font-weight: 800;
+  color: #ef4444;
+}
+
+.donut-label {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.donut-ratio {
+  margin-top: 8px;
+  color: #6b7280;
+  font-size: .9rem;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3,1fr);
+  gap: 16px;
+}
+
+.metric-card {
+  background: #fff;
+  border-radius: 20px;
+  padding: 20px;
+  border: 1px solid #eef2f7;
+  box-shadow: 0 4px 12px rgba(0,0,0,.04);
+}
+
+.metric-number {
+  font-size: 2rem;
+  font-weight: 800;
+}
+
+.metric-label {
+  margin-top: 8px;
+  color: #64748b;
+}
+
+@media(max-width:1200px){
+  .dashboard-top-row{
+      grid-template-columns:1fr;
+  }
+
+  .dashboard-chart-panel{
+      order:-1;
+  }
+}
+
+.dashboard-chart-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.dashboard-chart-panel::before {
+  content: '';
+  position: absolute;
+  width: 320px;
+  height: 320px;
+  border-radius: 50%;
+  background: radial-gradient(
+      rgba(239,68,68,.08),
+      transparent 70%
+  );
+  pointer-events: none;
+}
+
+/*New modern dashboard*/
+.metric-card{
+  position:relative;
+  border-radius:24px;
+  padding:24px;
+  min-height:180px;
+  background:#fff;
+  border:1px solid #edf2f7;
+  box-shadow:0 8px 24px rgba(15,23,42,.05);
+  transition:.25s;
+}
+
+.metric-card:hover{
+  transform:translateY(-4px);
+}
+
+.metric-icon{
+  width:64px;
+  height:64px;
+  border-radius:50%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:28px;
+  margin-bottom:18px;
+}
+
+.metric-number{
+  font-size:3rem;
+  font-weight:800;
+  line-height:1;
+}
+
+.metric-label{
+  margin-top:10px;
+  font-size:1rem;
+  font-weight:600;
+}
+
+.metric-total{
+  background:#f8fbff;
+}
+.metric-total .metric-icon{
+  background:#dbeafe;
+  color:#3b82f6;
+}
+.metric-total .metric-number{
+  color:#3b82f6;
+}
+
+.metric-pending{
+  background:#fffaf0;
+}
+.metric-pending .metric-icon{
+  background:#fde68a;
+  color:#f59e0b;
+}
+.metric-pending .metric-number{
+  color:#f59e0b;
+}
+
+.metric-accepted{
+  background:#f4fff6;
+}
+.metric-accepted .metric-icon{
+  background:#bbf7d0;
+  color:#22c55e;
+}
+.metric-accepted .metric-number{
+  color:#22c55e;
+}
+
+.metric-wip{
+  background:#f8fbff;
+}
+.metric-wip .metric-icon{
+  background:#dbeafe;
+  color:#2563eb;
+}
+.metric-wip .metric-number{
+  color:#2563eb;
+}
+
+.metric-partial{
+  background:#faf5ff;
+}
+.metric-partial .metric-icon{
+  background:#e9d5ff;
+  color:#8b5cf6;
+}
+.metric-partial .metric-number{
+  color:#8b5cf6;
+}
+
+.metric-completed{
+  background:#f0fdfa;
+}
+.metric-completed .metric-icon{
+  background:#ccfbf1;
+  color:#14b8a6;
+}
+.metric-completed .metric-number{
+  color:#14b8a6;
+}
+
+.metric-closed{
+  background:#fff5f5;
+}
+.metric-closed .metric-icon{
+  background:#fecaca;
+  color:#ef4444;
+}
+.metric-closed .metric-number{
+  color:#ef4444;
+}
+
+.issue-total{
+  background:#faf5ff;
+}
+.issue-total .metric-icon{
+  background:#e9d5ff;
+  color:#8b5cf6;
+}
+.issue-total .metric-number{
+  color:#8b5cf6;
+}
+
+.issue-converted{
+  background:#f4fff6;
+}
+.issue-converted .metric-icon{
+  background:#bbf7d0;
+  color:#22c55e;
+}
+.issue-converted .metric-number{
+  color:#22c55e;
+}
+
+.issue-remaining{
+  background:#fffaf0;
+}
+.issue-remaining .metric-icon{
+  background:#fde68a;
+  color:#f59e0b;
+}
+.issue-remaining .metric-number{
+  color:#f59e0b;
+}
+
+/*New donught style dashboard
+.donut-progress{
+  stroke:#ef4444;
+}
+
+.donut-percent{
+  color:#ef4444;
+  font-size:4rem;
+  font-weight:800;
+}
+
+.donut-label{
+  color:#ef4444;
+  font-size:1.5rem;
+  font-weight:700;
+}*/

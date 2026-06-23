@@ -24,6 +24,8 @@ let currentUserData = null;
 let tasksCache = [];
 let issuesCache = [];
 
+const FINISHED_TASK_STATUSES = new Set(['completed', 'closed', 'rejected']);
+
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
   setupEventListeners();
@@ -68,8 +70,8 @@ function setupEventListeners() {
   document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', (e) => {
       document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-      e.target.classList.add('active');
-      const section = e.target.dataset.section;
+      item.classList.add('active');
+      const section = item.dataset.section;
       showSection(section);
       
       // If notifications section, load notifications
@@ -85,6 +87,10 @@ function setupEventListeners() {
       // If issues section, update active issue filters UI
       if (section === 'issues') {
         updateActiveIssueFilters();
+      }
+
+      if (section === 'deadlines') {
+        loadDeadlineTasks();
       }
     });
   });
@@ -127,7 +133,7 @@ function setupEventListeners() {
   });
 
   // Search and filter events
-  ['taskSearch', 'taskStatusFilter', 'taskPrimaryFilter', 'taskSecondaryFilter', 'taskDateFilter'].forEach(id => {
+  ['taskSearch', 'taskStatusFilter', 'taskPrimaryFilter', 'taskSecondaryFilter', 'taskDateFilter', 'taskDeadlineFilter', 'taskRemainingDaysFilter'].forEach(id => {
     const el = document.getElementById(id);
     if (el) {
       el.addEventListener('input', () => {
@@ -162,6 +168,13 @@ function setupEventListeners() {
       clearAllTaskFilters();
     });
   }
+
+  const deadlineDaysFilter = document.getElementById('deadlineDaysFilter');
+  if (deadlineDaysFilter) {
+    deadlineDaysFilter.addEventListener('input', () => {
+      loadDeadlineTasks();
+    });
+  }
 }
 
 // Helper to clear all filters
@@ -171,6 +184,8 @@ function clearAllTaskFilters() {
   document.getElementById('taskPrimaryFilter').value = '';
   document.getElementById('taskSecondaryFilter').value = '';
   document.getElementById('taskDateFilter').value = '';
+  document.getElementById('taskDeadlineFilter').value = '';
+  document.getElementById('taskRemainingDaysFilter').value = '';
   
   updateActiveFilters();
   loadTasks(document.querySelector('.tab-btn.active')?.dataset.tab || 'all');
@@ -183,6 +198,8 @@ function updateActiveFilters() {
   const primaryVal = document.getElementById('taskPrimaryFilter').value;
   const secondaryVal = document.getElementById('taskSecondaryFilter').value;
   const dateVal = document.getElementById('taskDateFilter').value;
+  const deadlineVal = document.getElementById('taskDeadlineFilter').value;
+  const remainingDaysVal = document.getElementById('taskRemainingDaysFilter').value.trim();
   
   const activeFiltersList = document.getElementById('activeFiltersList');
   const filtersCountSpan = document.querySelector('.filters-count');
@@ -251,6 +268,26 @@ function updateActiveFilters() {
     });
   }
   
+  // Add deadline filter
+  if (deadlineVal) {
+    activeFilters.push({
+      type: 'deadline',
+      value: deadlineVal,
+      label: deadlineVal,
+      icon: '⏰'
+    });
+  }
+  
+  // Add remaining days filter
+  if (remainingDaysVal) {
+    activeFilters.push({
+      type: 'remaining-days',
+      value: remainingDaysVal,
+      label: remainingDaysVal + ' days',
+      icon: '📊'
+    });
+  }
+  
   // Update UI
   filtersCountSpan.textContent = `Filters (${activeFilters.length})`;
   
@@ -277,6 +314,12 @@ function updateActiveFilters() {
           break;
         case 'date':
           chipClass += 'filter-chip-date';
+          break;
+        case 'deadline':
+          chipClass += 'filter-chip-date';
+          break;
+        case 'remaining-days':
+          chipClass += 'filter-chip-search';
           break;
       }
       
@@ -308,6 +351,12 @@ window.removeActiveFilter = function(type, value) {
       break;
     case 'date':
       document.getElementById('taskDateFilter').value = '';
+      break;
+    case 'deadline':
+      document.getElementById('taskDeadlineFilter').value = '';
+      break;
+    case 'remaining-days':
+      document.getElementById('taskRemainingDaysFilter').value = '';
       break;
   }
   
@@ -457,6 +506,30 @@ async function loadNotifications() {
   renderNotifications(notifications);
 }
 
+async function getUsersForNotifications() {
+  if (usersCache.length > 0) {
+    return usersCache;
+  }
+
+  const snapshot = await db.collection('groups').doc(currentGroup).collection('users').get();
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
+
+async function notifyAdmins(notification) {
+  const users = await getUsersForNotifications();
+  const admins = users.filter(user => user.isAdmin && user.email !== currentUser.email);
+
+  await Promise.all(admins.map(admin => (
+    db.collection('groups').doc(currentGroup)
+      .collection('users').doc(admin.email)
+      .collection('notifications').add({
+        ...notification,
+        read: false,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      })
+  )));
+}
+
 function checkAuthState() {
   auth.onAuthStateChanged(async (user) => {
     if (user) {
@@ -501,6 +574,8 @@ async function loadUserGroups(searchTerm = '') {
     const groupsList = document.getElementById('groupsList');
     groupsList.innerHTML = '<p style="color: var(--gray-500); text-align: center; padding: 2rem;">Loading groups...</p>';
 
+    const normalizeGroupId = (value) => String(value || '').trim().toLowerCase();
+
     // First, check if we need to load groups
     if (allUserGroupsCache.length === 0) {
       // Get all groups and check if user is a member
@@ -510,17 +585,20 @@ async function loadUserGroups(searchTerm = '') {
       const seenGroupIds = new Set();
       
       for (const groupDoc of allGroupsSnapshot.docs) {
+        const groupId = normalizeGroupId(groupDoc.id);
+
         // Skip duplicate group IDs
-        if (seenGroupIds.has(groupDoc.id)) continue;
+        if (!groupId || seenGroupIds.has(groupId)) continue;
         
         // Check if current user is a member of this group
         const userDoc = await groupDoc.ref.collection('users').doc(currentUser.email).get();
         
         if (userDoc.exists) {
-          seenGroupIds.add(groupDoc.id);
+          seenGroupIds.add(groupId);
           allUserGroupsCache.push({
-            id: groupDoc.id,
             ...groupDoc.data(),
+            id: groupId,
+            groupId,
             role: userDoc.data().isAdmin ? 'Admin' : 'Member',
             isAdmin: userDoc.data().isAdmin
           });
@@ -529,21 +607,25 @@ async function loadUserGroups(searchTerm = '') {
     }
 
     // Apply search filter
-    let userGroups = allUserGroupsCache;
+    let userGroups = allUserGroupsCache.filter((group, index, groups) => {
+      const groupId = normalizeGroupId(group.groupId || group.id);
+      return groupId && index === groups.findIndex(item => normalizeGroupId(item.groupId || item.id) === groupId);
+    });
+
     if (searchTerm.trim()) {
       userGroups = userGroups.filter(group => 
-        group.id.toLowerCase().includes(searchTerm.toLowerCase())
+        normalizeGroupId(group.groupId || group.id).includes(searchTerm.toLowerCase())
       );
     }
 
     if (userGroups.length > 0) {
       groupsList.innerHTML = userGroups.map(group => `
         <div class="group-card" style="position: relative;">
-          <div onclick="loadGroup('${group.id}')" style="cursor: pointer;">
-            <h4>${group.id}</h4>
+          <div onclick="loadGroup('${group.groupId || group.id}')" style="cursor: pointer;">
+            <h4>${group.groupId || group.id}</h4>
             <p>Your role: <span class="role-badge">${group.role}</span></p>
           </div>
-          ${group.isAdmin ? `<button class="btn secondary-btn small-btn" onclick="event.stopPropagation(); deleteGroup('${group.id}')" style="position: absolute; top: 1rem; right: 1rem; padding: 0.4rem 0.8rem; background: var(--danger-100); color: var(--danger-600); border: none;">Delete</button>` : ''}
+          ${group.isAdmin ? `<button class="btn secondary-btn small-btn" onclick="event.stopPropagation(); deleteGroup('${group.groupId || group.id}')" style="position: absolute; top: 1rem; right: 1rem; padding: 0.4rem 0.8rem; background: var(--danger-100); color: var(--danger-600); border: none;">Delete</button>` : ''}
         </div>
       `).join('');
     } else {
@@ -708,6 +790,9 @@ function setupRealtimeListeners() {
       tasksCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       loadTasks(document.querySelector('.tab-btn.active')?.dataset.tab || 'all');
       renderDashboardStats();
+      if (!document.getElementById('deadlinesSection').classList.contains('hidden')) {
+        loadDeadlineTasks();
+      }
     });
 
   // Listen for issue changes
@@ -732,6 +817,9 @@ function setupRealtimeListeners() {
       // Update active issue filters if on issues section
       if (!document.getElementById('issuesSection').classList.contains('hidden')) {
         updateActiveIssueFilters();
+      }
+      if (!document.getElementById('deadlinesSection').classList.contains('hidden')) {
+        loadDeadlineTasks();
       }
     });
   
@@ -919,8 +1007,78 @@ window.verifyProgress = async function(taskId) {
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
   }
+
+  await notifyAdmins({
+    type: 'progress_verified_admin',
+    taskId,
+    taskDisplayId,
+    message: `Progress for task ${taskDisplayId} was verified by ${usersCache.find(u => u.email === currentUser.email)?.name || currentUser.email}`
+  });
   
   document.getElementById('viewTaskModal').classList.add('hidden');
+}
+
+function isTaskFinished(task) {
+  return FINISHED_TASK_STATUSES.has(task.status);
+}
+
+function getVisibleTasksForCurrentUser(tasks = tasksCache) {
+  if (currentUserData?.isAdmin) {
+    return [...tasks];
+  }
+
+  return tasks.filter(task =>
+    task.primaryUser === currentUser.email ||
+    (task.secondaryUser === currentUser.email && task.status !== 'pending')
+  );
+}
+
+function getLatestProgress(task) {
+  if (!task.progress || task.progress.length === 0) {
+    return null;
+  }
+
+  return task.progress[task.progress.length - 1];
+}
+
+function getDashboardTaskStatus(task) {
+  const latestProgress = getLatestProgress(task);
+
+  if (
+    ['work_in_progress', 'partially_completed', 'completed'].includes(task.status) &&
+    latestProgress &&
+    latestProgress.verifiedByPrimary !== true
+  ) {
+    return 'accepted';
+  }
+
+  return task.status;
+}
+
+function getDateOnly(dateValue) {
+  const date = new Date(dateValue);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function getTaskDeadlineOffset(task) {
+  const today = getDateOnly(new Date());
+  const deadline = getDateOnly(task.deadline);
+  return Math.round((deadline - today) / (1000 * 60 * 60 * 24));
+}
+
+function bindTaskCardActions(container = document) {
+  container.querySelectorAll('.view-task-btn').forEach(btn => {
+    btn.addEventListener('click', () => openViewTaskModal(btn.dataset.id));
+  });
+
+  container.querySelectorAll('.accept-task-btn').forEach(btn => {
+    btn.addEventListener('click', () => acceptTask(btn.dataset.id));
+  });
+
+  container.querySelectorAll('.reject-task-btn').forEach(btn => {
+    btn.addEventListener('click', () => rejectTask(btn.dataset.id));
+  });
 }
 
 async function loadUsers() {
@@ -986,38 +1144,88 @@ function handleLogout() {
 }
 
 function renderDashboardStats() {
-  const isAdmin = currentUserData?.isAdmin;
-  
   // Task stats
   let taskStats = {
     total: 0,
     pending: 0,
     accepted: 0,
     wip: 0,
-    completed: 0
+    partiallyCompleted: 0,
+    completed: 0,
+    closed: 0
   };
   
-  tasksCache.forEach(task => {
-    // For non-admin/non-primary: only show tasks that are not pending
-    if (!isAdmin && task.primaryUser !== currentUser.email) {
-      if (task.status === 'pending') {
-        return;
-      }
-      // For secondary: only show if they are secondary and task is not pending
-      if (task.secondaryUser !== currentUser.email) {
-        return;
-      }
-    }
-    
+  getVisibleTasksForCurrentUser(tasksCache).forEach(task => {
+    const dashboardStatus = getDashboardTaskStatus(task);
     taskStats.total++;
-    if (task.status === 'pending') taskStats.pending++;
-    if (task.status === 'accepted') taskStats.accepted++;
-    if (task.status === 'work_in_progress') taskStats.wip++;
-    if (task.status === 'partially_completed') taskStats.wip++; // Count partially completed as WIP
-    if (task.status === 'completed' || task.status === 'closed') taskStats.completed++;
+    if (dashboardStatus === 'pending') taskStats.pending++;
+    if (dashboardStatus === 'accepted') taskStats.accepted++;
+    if (dashboardStatus === 'work_in_progress') taskStats.wip++;
+    if (dashboardStatus === 'partially_completed') taskStats.partiallyCompleted++;
+    if (dashboardStatus === 'completed') taskStats.completed++;
+    if (dashboardStatus === 'closed') taskStats.closed++;
+    /*if (dashboardStatus === 'work_in_progress' || dashboardStatus === 'partially_completed') taskStats.wip++;
+    if (dashboardStatus === 'completed' || dashboardStatus === 'closed') taskStats.completed++;*/
   });
   
+  //Do nut shaped chart for closed tasks chart
+const closedPercentage =
+  taskStats.total > 0
+    ? Math.round((taskStats.closed / taskStats.total) * 100)
+    : 0;
+
+    let donutColor;
+
+if (closedPercentage < 25) {
+  donutColor = '#ef4444'; // red
+} else if (closedPercentage < 50) {
+  donutColor = '#f97316'; // orange
+} else if (closedPercentage < 75) {
+  donutColor = '#eab308'; // yellow
+} else if (closedPercentage < 100) {
+  donutColor = '#22c55e'; // green
+} else {
+  donutColor = '#16a34a'; // dark green
+}
+
+
+const radius = 85;
+const circumference = 2 * Math.PI * radius;
+
+const circle = document.getElementById('closedDonutCircle');
+
+if (circle) {
+  circle.style.strokeDasharray = circumference;
+
+  circle.style.strokeDashoffset =
+    circumference -
+    (closedPercentage / 100) * circumference;
+}
+
+document.getElementById('closedPercent').textContent =
+  `${closedPercentage}%`;
+
+document.getElementById('closedRatio').textContent =
+  `${taskStats.closed} of ${taskStats.total} Tasks`;
+
+  // CHANGE CENTER TEXT COLORS
+  circle.style.stroke = donutColor;
+document.getElementById('closedPercent').style.color = donutColor;
+
+const donutLabel = document.querySelector('.donut-label');
+if (donutLabel) {
+  donutLabel.style.color = donutColor;
+}
+
+// OPTIONAL: COLOR GLOW EFFECT
+const chartPanel = document.querySelector('.dashboard-chart-panel');
+if (chartPanel) {
+  chartPanel.style.boxShadow =
+    `0 15px 40px ${donutColor}22`;
+}
+
   // Issue stats
+  const isAdmin = currentUserData?.isAdmin;
   let issueStats = {
     total: 0,
     converted: 0,
@@ -1034,65 +1242,83 @@ function renderDashboardStats() {
   });
   
   // Render task metrics
-  document.getElementById('tasksMetricsGrid').innerHTML = `
-    <div class="metric-card">
-      <div class="metric-number">${taskStats.total}</div>
-      <div class="metric-label">Total Tasks</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-number">${taskStats.pending}</div>
-      <div class="metric-label">Pending Tasks</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-number">${taskStats.accepted}</div>
-      <div class="metric-label">Accepted Tasks</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-number">${taskStats.wip}</div>
-      <div class="metric-label">Work in Progress</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-number">${taskStats.completed}</div>
-      <div class="metric-label">Completed Tasks</div>
-    </div>
-  `;
   
+  
+  //Render task metrics with separate partially completed and closed tasks
+document.getElementById('tasksMetricsGrid').innerHTML = `
+<div class="metric-card metric-total">
+  <div class="metric-icon"><i class="fas fa-clipboard-list"></i></div>
+  <div class="metric-number">${taskStats.total}</div>
+  <div class="metric-label">Total Tasks</div>
+</div>
+
+<div class="metric-card metric-pending">
+  <div class="metric-icon"><i class="fas fa-clock"></i></div>
+  <div class="metric-number">${taskStats.pending}</div>
+  <div class="metric-label">Pending Tasks</div>
+</div>
+
+<div class="metric-card metric-accepted">
+  <div class="metric-icon"><i class="fas fa-check"></i></div>
+  <div class="metric-number">${taskStats.accepted}</div>
+  <div class="metric-label">Accepted Tasks</div>
+</div>
+
+<div class="metric-card metric-wip">
+  <div class="metric-icon"><i class="fas fa-sync-alt"></i></div>
+  <div class="metric-number">${taskStats.wip}</div>
+  <div class="metric-label">Work in Progress</div>
+</div>
+
+<div class="metric-card metric-partial">
+  <div class="metric-icon"><i class="fas fa-chart-pie"></i></div>
+  <div class="metric-number">${taskStats.partiallyCompleted}</div>
+  <div class="metric-label">Partially Completed</div>
+</div>
+
+<div class="metric-card metric-completed">
+  <div class="metric-icon"><i class="fas fa-flag"></i></div>
+  <div class="metric-number">${taskStats.completed}</div>
+  <div class="metric-label">Completed Tasks</div>
+</div>
+
+<div class="metric-card metric-closed">
+  <div class="metric-icon"><i class="fas fa-lock"></i></div>
+  <div class="metric-number">${taskStats.closed}</div>
+  <div class="metric-label">Closed Tasks</div>
+</div>
+`;
+
   // Render issue metrics
   document.getElementById('issuesMetricsGrid').innerHTML = `
-    <div class="metric-card">
-      <div class="metric-number">${issueStats.total}</div>
-      <div class="metric-label">Total Issues</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-number">${issueStats.converted}</div>
-      <div class="metric-label">Converted to Tasks</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-number">${issueStats.remaining}</div>
-      <div class="metric-label">Remaining Issues</div>
-    </div>
-  `;
+<div class="metric-card issue-total">
+  <div class="metric-icon"><i class="fas fa-file-alt"></i></div>
+  <div class="metric-number">${issueStats.total}</div>
+  <div class="metric-label">Total Issues</div>
+</div>
+
+<div class="metric-card issue-converted">
+  <div class="metric-icon"><i class="fas fa-check"></i></div>
+  <div class="metric-number">${issueStats.converted}</div>
+  <div class="metric-label">Converted to Tasks</div>
+</div>
+
+<div class="metric-card issue-remaining">
+  <div class="metric-icon"><i class="fas fa-exclamation"></i></div>
+  <div class="metric-number">${issueStats.remaining}</div>
+  <div class="metric-label">Remaining Issues</div>
+</div>
+`;
 }
 
 function loadTasks(tab) {
-  const isAdmin = currentUserData?.isAdmin;
-  
-  let tasks = [...tasksCache];
+  let tasks = getVisibleTasksForCurrentUser(tasksCache);
   
   // Apply tab filter
   if (tab === 'primary') {
     tasks = tasks.filter(t => t.primaryUser === currentUser.email);
   } else if (tab === 'secondary') {
-    // For secondary tab, only show tasks that have been accepted by primary
     tasks = tasks.filter(t => t.secondaryUser === currentUser.email && t.status !== 'pending');
-  } else if (!isAdmin) {
-    // For non-admin, filter tasks:
-    //  - If primary, show all assigned to primary
-    //  - If secondary, only show tasks assigned to secondary AND status is not pending
-    tasks = tasks.filter(t => 
-      (t.primaryUser === currentUser.email) || 
-      (t.secondaryUser === currentUser.email && t.status !== 'pending')
-    );
   }
 
   // Apply search and filter
@@ -1101,6 +1327,8 @@ function loadTasks(tab) {
   const primaryFilter = document.getElementById('taskPrimaryFilter').value;
   const secondaryFilter = document.getElementById('taskSecondaryFilter').value;
   const dateFilter = document.getElementById('taskDateFilter').value;
+  const deadlineFilter = document.getElementById('taskDeadlineFilter').value;
+  const remainingDaysFilter = document.getElementById('taskRemainingDaysFilter').value.trim();
 
   if (searchTerm) {
     tasks = tasks.filter(t => 
@@ -1124,13 +1352,124 @@ function loadTasks(tab) {
   if (dateFilter) {
     tasks = tasks.filter(t => t.assignedDate === dateFilter);
   }
+  
+  if (deadlineFilter) {
+    tasks = tasks.filter(t => t.deadline === deadlineFilter);
+  }
+  
+  if (remainingDaysFilter) {
+    const remainingDays = parseInt(remainingDaysFilter, 10);
+    if (!isNaN(remainingDays)) {
+      tasks = tasks.filter(t => {
+        const remaining = getTaskDeadlineOffset(t);
+        return remaining === remainingDays;
+      });
+    }
+  }
 
   document.getElementById('tasksList').innerHTML = tasks.map(task => renderTaskCard(task)).join('');
-    
-  document.querySelectorAll('.view-task-btn').forEach(btn => {
-    btn.addEventListener('click', () => openViewTaskModal(btn.dataset.id));
-  });
+  bindTaskCardActions(document.getElementById('tasksList'));
 }
+
+function loadDeadlineTasks() {
+  const deadlineDaysFilter = document.getElementById('deadlineDaysFilter');
+  const deadlineSummary = document.getElementById('deadlineSummary');
+  const deadlinesList = document.getElementById('deadlinesList');
+
+  if (!deadlineDaysFilter || !deadlineSummary || !deadlinesList) {
+    return;
+  }
+
+  let daysValue = parseInt(deadlineDaysFilter.value, 10);
+
+  if (Number.isNaN(daysValue)) {
+    daysValue = 0;
+  }
+
+  deadlineDaysFilter.value = String(daysValue);
+
+  const filteredTasks = getVisibleTasksForCurrentUser(tasksCache)
+    .filter(task => {
+      const deadlineOffset = getTaskDeadlineOffset(task);
+
+      return deadlineOffset === daysValue && !isTaskFinished(task);
+    })
+    .sort((a, b) => a.deadline.localeCompare(b.deadline));
+
+  if (daysValue < 0) {
+    deadlineSummary.textContent =
+      `Showing tasks overdue by ${Math.abs(daysValue)} day(s) that are not completed.`;
+  } else if (daysValue === 0) {
+    deadlineSummary.textContent =
+      'Showing tasks whose deadline ends today.';
+  } else {
+    deadlineSummary.textContent =
+      `Showing tasks whose deadline ends in ${daysValue} day(s).`;
+  }
+
+  if (filteredTasks.length === 0) {
+    deadlinesList.innerHTML = `
+      <div class="empty-state-card">
+        <p>No tasks match this deadline filter.</p>
+      </div>
+    `;
+    return;
+  }
+
+  deadlinesList.innerHTML = filteredTasks
+    .map(task => renderTaskCard(task))
+    .join('');
+
+  bindTaskCardActions(deadlinesList);
+}
+
+/*function loadDeadlineTasks() {
+  const deadlineDaysFilter = document.getElementById('deadlineDaysFilter');
+  const deadlineSummary = document.getElementById('deadlineSummary');
+  const deadlinesList = document.getElementById('deadlinesList');
+
+  if (!deadlineDaysFilter || !deadlineSummary || !deadlinesList) {
+    return;
+  }
+
+  let daysValue = parseInt(deadlineDaysFilter.value, 10);
+  if (Number.isNaN(daysValue) || daysValue < 0) {
+    daysValue = 0;
+  }
+  deadlineDaysFilter.value = String(daysValue);
+
+  const filteredTasks = getVisibleTasksForCurrentUser(tasksCache)
+    .filter(task => {
+      const deadlineOffset = getTaskDeadlineOffset(task);
+
+      if (daysValue === 0) {
+        return deadlineOffset < 0 && !isTaskFinished(task);
+      }
+
+      return deadlineOffset === daysValue - 1 && !isTaskFinished(task);
+    })
+    .sort((a, b) => a.deadline.localeCompare(b.deadline));
+
+  if (daysValue === 0) {
+    deadlineSummary.textContent = 'Showing overdue tasks that are not completed.';
+  } else if (daysValue === 1) {
+    deadlineSummary.textContent = 'Showing tasks whose deadline ends today.';
+  } else {
+    deadlineSummary.textContent = `Showing tasks whose deadline ends in ${daysValue - 1} day(s).`;
+  }
+
+  if (filteredTasks.length === 0) {
+    deadlinesList.innerHTML = `
+      <div class="empty-state-card">
+        <p>No tasks match this deadline filter.</p>
+      </div>
+    `;
+    return;
+  }
+
+  deadlinesList.innerHTML = filteredTasks.map(task => renderTaskCard(task)).join('');
+  bindTaskCardActions(deadlinesList);
+}*/
 
 function renderTaskCard(task) {
   const primaryUser = usersCache.find(u => u.email === task.primaryUser);
@@ -1392,6 +1731,19 @@ async function openViewTaskModal(taskId) {
   
   // Admin actions: close task, delete task
   if (isAdmin) {
+    if (!isTaskFinished(task)) {
+      actionsHtml = (actionsHtml || '') + `
+        <div style="margin-top: 1.5rem; border-top: 1px solid var(--gray-200); padding-top: 1.5rem;">
+          <h4 style="margin-bottom: 1rem;">Extend Deadline</h4>
+          <div class="input-group">
+            <label for="extendDeadlineDays">Add More Days</label>
+            <input type="number" id="extendDeadlineDays" min="1" value="1" placeholder="Enter number of days">
+          </div>
+          <button class="btn primary-btn" style="width:100%;" onclick="extendTaskDeadline('${task.id}')">Extend Deadline</button>
+        </div>
+      `;
+    }
+
     if (task.status === 'completed') {
       actionsHtml = (actionsHtml || '') + `
         <div style="margin-top: 1.5rem;">
@@ -1495,6 +1847,13 @@ window.acceptTask = async function(taskId) {
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
   }
+
+  await notifyAdmins({
+    type: 'task_accepted_admin',
+    taskId,
+    taskDisplayId,
+    message: `Task ${taskDisplayId} was accepted by ${usersCache.find(u => u.email === currentUser.email)?.name || currentUser.email}`
+  });
   
   document.getElementById('viewTaskModal').classList.add('hidden');
 }
@@ -1530,6 +1889,47 @@ window.deleteTask = async function(taskId) {
   } catch (error) {
     console.error('Delete task error:', error);
     alert('Failed to delete task: ' + error.message);
+  }
+}
+
+window.extendTaskDeadline = async function(taskId) {
+  const task = tasksCache.find(t => t.id === taskId);
+  const extraDays = parseInt(document.getElementById('extendDeadlineDays')?.value, 10);
+
+  if (!task) {
+    return;
+  }
+
+  if (Number.isNaN(extraDays) || extraDays < 1) {
+    alert('Please enter a valid number of days to extend.');
+    return;
+  }
+
+  const currentDeadline = new Date(task.deadline);
+  currentDeadline.setDate(currentDeadline.getDate() + extraDays);
+  const newDeadline = currentDeadline.toISOString().split('T')[0];
+
+  const now = new Date();
+  const date = now.toISOString().split('T')[0];
+  const time = now.toTimeString().split(' ')[0].substring(0, 5);
+
+  try {
+    await db.collection('groups').doc(currentGroup).collection('tasks').doc(taskId).update({
+      deadline: newDeadline,
+      duration: (parseInt(task.duration, 10) || 0) + extraDays,
+      trail: firebase.firestore.FieldValue.arrayUnion({
+        action: 'Deadline Extended',
+        user: currentUser.email,
+        date,
+        time,
+        details: `Deadline extended from ${task.deadline} to ${newDeadline}`
+      })
+    });
+
+    document.getElementById('viewTaskModal').classList.add('hidden');
+  } catch (error) {
+    console.error('Extend deadline error:', error);
+    alert('Failed to extend deadline: ' + error.message);
   }
 }
 
