@@ -90,6 +90,7 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
             Notifications
             <span id="notificationBadge" class="notification-badge hidden">0</span>
           </button>
+          <button class="nav-item" data-section="punchLists">Punch Lists</button>
           <button id="adminNavUsers" class="nav-item hidden" data-section="users">Users</button>
           <button id="adminNavProject" class="nav-item hidden" data-section="projects">Project</button>
         </aside>
@@ -313,6 +314,52 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
               <div id="invitedUsersList" class="users-grid"></div>
             </div>
           </section>
+
+          <!-- Punch Lists Section -->
+          <section id="punchListsSection" class="section hidden">
+            <div class="section-header">
+              <h2>Punch Lists</h2>
+              <button id="createPunchListBtn" class="btn primary-btn">+ New Punch List</button>
+            </div>
+            
+            <!-- Stats Cards -->
+            <div id="punchListsMetricsGrid" class="metrics-grid" style="margin-bottom: 1.5rem;"></div>
+            
+            <!-- View Toggle -->
+            <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem; gap: 0.5rem;">
+              <button id="punchListCardViewBtn" class="btn secondary-btn small-btn active">
+                <i class="fas fa-th"></i> Card View
+              </button>
+              <button id="punchListListViewBtn" class="btn secondary-btn small-btn">
+                <i class="fas fa-list"></i> List View
+              </button>
+            </div>
+            
+            <!-- View Container -->
+            <div id="punchListCardView" class="users-grid"></div>
+            <div id="punchListListView" class="hidden" style="overflow-x: auto;">
+              <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <thead style="position: sticky; top: 0; background: white; z-index: 10;">
+                  <tr>
+                    <th style="padding: 1rem; text-align: left; border-bottom: 1px solid var(--gray-200);">ID</th>
+                    <th style="padding: 1rem; text-align: left; border-bottom: 1px solid var(--gray-200);">Name</th>
+                    <th style="padding: 1rem; text-align: left; border-bottom: 1px solid var(--gray-200);">Visibility</th>
+                    <th style="padding: 1rem; text-align: left; border-bottom: 1px solid var(--gray-200);">Progress</th>
+                    <th style="padding: 1rem; text-align: left; border-bottom: 1px solid var(--gray-200);">Created By</th>
+                    <th style="padding: 1rem; text-align: left; border-bottom: 1px solid var(--gray-200);">Date</th>
+                    <th style="padding: 1rem; text-align: left; border-bottom: 1px solid var(--gray-200);">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="punchListTableBody"></tbody>
+              </table>
+            </div>
+            
+            <!-- Archived Section -->
+            <div style="margin-top: 2rem;">
+              <h3 style="margin-bottom: 1rem; color: var(--gray-600);">Archived Punch Lists</h3>
+              <div id="archivedPunchListsList" class="users-grid"></div>
+            </div>
+          </section>
           
           <!-- Projects Section (Admin Only) -->
           <section id="projectsSection" class="section hidden">
@@ -497,6 +544,46 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
         </div>
         <button type="submit" class="btn primary-btn" style="width: 100%;">Save Project</button>
       </form>
+    </div>
+  </div>
+
+  <!-- Create/Edit Punch List Modal -->
+  <div id="punchListModal" class="modal hidden">
+    <div class="modal-content large-modal">
+      <span class="close-btn">&times;</span>
+      <h3 id="punchListModalTitle">Create New Punch List</h3>
+      <form id="punchListForm">
+        <input type="hidden" id="punchListId">
+        <input type="hidden" id="punchListFromTaskId">
+        <div class="input-group">
+          <label for="punchListName">Punch List Name</label>
+          <input type="text" id="punchListName" required placeholder="Enter punch list name">
+        </div>
+        <div class="input-group">
+          <label for="punchListDescription">Description</label>
+          <textarea id="punchListDescription" rows="4" placeholder="Enter description"></textarea>
+        </div>
+        <div class="input-group">
+          <label for="punchListVisibility">Visibility</label>
+          <select id="punchListVisibility">
+            <option value="public">Public</option>
+            <option value="private">Private</option>
+          </select>
+        </div>
+        <hr style="border: none; border-top: 1px solid var(--gray-200); margin: 1.5rem 0;">
+        <h4 style="margin-bottom: 1rem;">Checklist Items</h4>
+        <div id="punchListItems" style="margin-bottom: 1rem;"></div>
+        <button type="button" id="addPunchListItemBtn" class="btn secondary-btn" style="width: 100%; margin-bottom: 1rem;">+ Add Item</button>
+        <button type="submit" class="btn primary-btn" style="width: 100%;">Save Punch List</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- View Punch List Modal -->
+  <div id="viewPunchListModal" class="modal hidden">
+    <div class="modal-content large-modal">
+      <span class="close-btn">&times;</span>
+      <div id="viewPunchListContent"></div>
     </div>
   </div>
 

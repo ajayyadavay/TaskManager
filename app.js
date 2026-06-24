@@ -25,6 +25,7 @@ let tasksCache = [];
 let issuesCache = [];
 let categoriesCache = [];
 let projectsCache = [];
+let punchListsCache = [];
 let deadlineOperator = '=';
 
 const FINISHED_TASK_STATUSES = new Set(['completed', 'closed', 'rejected']);
@@ -70,6 +71,20 @@ function setupEventListeners() {
   document.getElementById('createIssueBtn').addEventListener('click', openIssueModal);
   document.getElementById('createCategoryBtn')?.addEventListener('click', () => openCategoryModal());
   document.getElementById('createProjectBtn')?.addEventListener('click', () => openProjectModal());
+  document.getElementById('createPunchListBtn')?.addEventListener('click', () => openPunchListModal());
+  document.getElementById('addPunchListItemBtn')?.addEventListener('click', addPunchListItemToForm);
+  document.getElementById('punchListCardViewBtn')?.addEventListener('click', () => {
+    document.getElementById('punchListCardViewBtn').classList.add('active');
+    document.getElementById('punchListListViewBtn').classList.remove('active');
+    document.getElementById('punchListCardView').classList.remove('hidden');
+    document.getElementById('punchListListView').classList.add('hidden');
+  });
+  document.getElementById('punchListListViewBtn')?.addEventListener('click', () => {
+    document.getElementById('punchListCardViewBtn').classList.remove('active');
+    document.getElementById('punchListListViewBtn').classList.add('active');
+    document.getElementById('punchListCardView').classList.add('hidden');
+    document.getElementById('punchListListView').classList.remove('hidden');
+  });
   
   // Nav items
   document.querySelectorAll('.nav-item').forEach(item => {
@@ -128,6 +143,7 @@ function setupEventListeners() {
   document.getElementById('issueForm').addEventListener('submit', handleSubmitIssue);
   document.getElementById('categoryForm')?.addEventListener('submit', handleSaveCategory);
   document.getElementById('projectForm')?.addEventListener('submit', handleSaveProject);
+  document.getElementById('punchListForm')?.addEventListener('submit', handleSavePunchList);
 
   // User profile dropdown
   document.getElementById('userProfile').addEventListener('click', (e) => {
@@ -918,6 +934,14 @@ function setupRealtimeListeners() {
       populateCategoryProjectFilters();
       renderProjectsList();
       updateCounts();
+    });
+
+  // Listen for punch lists changes
+  db.collection('groups').doc(currentGroup).collection('punchLists')
+    .orderBy('createdAt', 'desc')
+    .onSnapshot(snapshot => {
+      punchListsCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderPunchLists();
     });
   
   // Listen for notifications for the current user
@@ -2050,6 +2074,14 @@ let trailHtml = `
         <button class="btn primary-btn" style="width:100%;" onclick="openCreateTaskFromTask('${task.id}')">Create New Task from this Task</button>
       </div>
     `;
+    // Add "Create Punch List" button if task is open/in progress/on hold
+    if (['pending', 'accepted', 'work_in_progress', 'partially_completed'].includes(task.status)) {
+      actionsHtml = (actionsHtml || '') + `
+        <div style="margin-top: 1rem;">
+          <button class="btn primary-btn" style="width:100%;" onclick="openPunchListModal('${task.id}')">Create Punch List</button>
+        </div>
+      `;
+    }
      
     // Admin reassignment (only if task is not rejected)
     if (/*task.status !== 'rejected' &&*/ !isTaskFinished(task)) {
@@ -2292,6 +2324,441 @@ async function deleteIssue(issueId) {
     console.error('Delete issue error:', error);
     alert('Failed to delete issue: ' + error.message);
   }
+}
+
+// ------------------------------
+// Punch List Functions
+// ------------------------------
+let currentPunchListItems = [];
+
+function openPunchListModal(taskId = null) {
+  document.getElementById('punchListModalTitle').textContent = 'Create New Punch List';
+  document.getElementById('punchListForm').reset();
+  document.getElementById('punchListId').value = '';
+  document.getElementById('punchListFromTaskId').value = taskId || '';
+  currentPunchListItems = [];
+  renderPunchListItemsInForm();
+  document.getElementById('punchListModal').classList.remove('hidden');
+}
+
+function openEditPunchListModal(punchListId) {
+  const punchList = punchListsCache.find(pl => pl.id === punchListId);
+  if (!punchList) return;
+  
+  document.getElementById('punchListModalTitle').textContent = 'Edit Punch List';
+  document.getElementById('punchListId').value = punchListId;
+  document.getElementById('punchListName').value = punchList.name;
+  document.getElementById('punchListDescription').value = punchList.description || '';
+  document.getElementById('punchListVisibility').value = punchList.visibility || 'public';
+  currentPunchListItems = [...(punchList.items || [])];
+  renderPunchListItemsInForm();
+  document.getElementById('punchListModal').classList.remove('hidden');
+}
+
+function addPunchListItemToForm() {
+  const newItem = {
+    id: Date.now().toString(),
+    description: '',
+    completed: false
+  };
+  currentPunchListItems.push(newItem);
+  renderPunchListItemsInForm();
+}
+
+function renderPunchListItemsInForm() {
+  const container = document.getElementById('punchListItems');
+  if (!container) return;
+  
+  container.innerHTML = currentPunchListItems.map((item, index) => `
+    <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem; align-items: center;">
+      <div style="min-width: 30px; font-weight: bold; text-align: center;">${index + 1}.</div>
+      <input type="text" value="${item.description}" placeholder="Item description" 
+             style="flex: 1; padding: 0.5rem; border: 1px solid var(--gray-300); border-radius: 0.5rem;"
+             onchange="updatePunchListItem('${item.id}', this.value)">
+      <button type="button" class="btn secondary-btn small-btn" 
+              onclick="removePunchListItem('${item.id}')">Remove</button>
+    </div>
+  `).join('');
+}
+
+function updatePunchListItem(id, description) {
+  const item = currentPunchListItems.find(i => i.id === id);
+  if (item) item.description = description;
+}
+
+function removePunchListItem(id) {
+  currentPunchListItems = currentPunchListItems.filter(i => i.id !== id);
+  renderPunchListItemsInForm();
+}
+
+async function handleSavePunchList(e) {
+  e.preventDefault();
+  
+  const name = document.getElementById('punchListName').value.trim();
+  const description = document.getElementById('punchListDescription').value.trim();
+  const visibility = document.getElementById('punchListVisibility').value;
+  const punchListId = document.getElementById('punchListId').value;
+  const fromTaskId = document.getElementById('punchListFromTaskId').value;
+  
+  if (!name) {
+    alert('Please enter a punch list name');
+    return;
+  }
+  
+  const now = new Date();
+  const date = now.toISOString().split('T')[0];
+  const time = now.toTimeString().split(' ')[0].substring(0, 5);
+  
+  try {
+    if (punchListId) {
+      // Update existing
+      await db.collection('groups').doc(currentGroup).collection('punchLists').doc(punchListId).update({
+        name,
+        description,
+        visibility,
+        items: currentPunchListItems,
+        lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        lastUpdatedDate: date,
+        lastUpdatedTime: time
+      });
+    } else {
+      // Create new
+      // Get next ID (PL-XXXXXX)
+      let nextNumber = 1;
+      const maxPunchList = punchListsCache.reduce((max, pl) => {
+        if (pl.punchListId && pl.punchListId.startsWith('PL-')) {
+          const num = parseInt(pl.punchListId.slice(3), 10);
+          return num > max ? num : max;
+        }
+        return max;
+      }, 0);
+      nextNumber = maxPunchList + 1;
+      const newPunchListId = 'PL-' + String(nextNumber).padStart(6, '0');
+      
+      const docRef = await db.collection('groups').doc(currentGroup).collection('punchLists').add({
+        punchListId: newPunchListId,
+        name,
+        description,
+        visibility,
+        items: currentPunchListItems,
+        taskId: fromTaskId || null,
+        createdBy: currentUser.email,
+        createdDate: date,
+        createdTime: time,
+        lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        lastUpdatedDate: date,
+        lastUpdatedTime: time,
+        status: 'active',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+    
+    document.getElementById('punchListModal').classList.add('hidden');
+    alert('Punch list saved successfully!');
+  } catch (error) {
+    console.error('Save punch list error:', error);
+    alert('Failed to save punch list: ' + error.message);
+  }
+}
+
+function calculatePunchListProgress(punchList) {
+  const items = punchList.items || [];
+  if (items.length === 0) return 0;
+  const completedCount = items.filter(i => i.completed).length;
+  return Math.round((completedCount / items.length) * 100);
+}
+
+function getTimeAgo(timestamp) {
+  if (!timestamp) return '';
+  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  
+  if (diffDays > 0) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  if (diffHours > 0) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+  if (diffMins > 0) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+  return 'Just now';
+}
+
+function renderPunchLists() {
+  const metricsContainer = document.getElementById('punchListsMetricsGrid');
+  if (metricsContainer) {
+    const total = punchListsCache.length;
+    const active = punchListsCache.filter(pl => pl.status === 'active').length;
+    const completed = punchListsCache.filter(pl => {
+      const progress = calculatePunchListProgress(pl);
+      return progress === 100;
+    }).length;
+    const archived = punchListsCache.filter(pl => pl.status === 'archived').length;
+    
+    metricsContainer.innerHTML = `
+      <div class="metrics-card">
+        <h3>Total</h3>
+        <p class="metrics-number">${total}</p>
+      </div>
+      <div class="metrics-card">
+        <h3>Active</h3>
+        <p class="metrics-number">${active}</p>
+      </div>
+      <div class="metrics-card">
+        <h3>Completed</h3>
+        <p class="metrics-number">${completed}</p>
+      </div>
+      <div class="metrics-card">
+        <h3>Archived</h3>
+        <p class="metrics-number">${archived}</p>
+      </div>
+    `;
+  }
+  
+  // Filter for visible punch lists
+  const visiblePunchLists = punchListsCache.filter(pl => 
+    pl.visibility === 'public' || pl.createdBy === currentUser.email
+  );
+  
+  const activePunchLists = visiblePunchLists.filter(pl => pl.status === 'active');
+  const archivedPunchLists = visiblePunchLists.filter(pl => pl.status === 'archived');
+  
+  // Render card view
+  const cardContainer = document.getElementById('punchListCardView');
+  if (cardContainer) {
+    if (activePunchLists.length === 0) {
+      cardContainer.innerHTML = `
+        <div class="empty-state-card">
+          <p>No punch lists yet. Create one!</p>
+        </div>
+      `;
+    } else {
+      cardContainer.innerHTML = activePunchLists.map(pl => {
+        const progress = calculatePunchListProgress(pl);
+        const createdByName = usersCache.find(u => u.email === pl.createdBy)?.name || pl.createdBy;
+        
+        return `
+          <div class="user-card" style="cursor: pointer;" onclick="openViewPunchListModal('${pl.id}')">
+            <h3 style="margin-bottom: 0.5rem;">${pl.punchListId}</h3>
+            <p style="font-weight: bold; margin-bottom: 0.5rem;">${pl.name}</p>
+            <div style="margin-bottom: 1rem;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                <span>Progress</span>
+                <span>${progress}%</span>
+              </div>
+              <div style="width: 100%; height: 8px; background: var(--gray-200); border-radius: 4px; overflow: hidden;">
+                <div style="width: ${progress}%; height: 100%; background: var(--primary-500);"></div>
+              </div>
+            </div>
+            <div style="margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--gray-600);">
+              <div><strong>Created by:</strong> ${createdByName}</div>
+              <div><strong>Visibility:</strong> ${pl.visibility}</div>
+              <div><strong>Updated:</strong> ${getTimeAgo(pl.lastUpdatedAt)}</div>
+            </div>
+            ${pl.createdBy === currentUser.email ? `
+              <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                <button class="btn secondary-btn small-btn" onclick="event.stopPropagation(); openEditPunchListModal('${pl.id}')">Edit</button>
+                <button class="btn secondary-btn small-btn" onclick="event.stopPropagation(); archivePunchList('${pl.id}')">Archive</button>
+                <button class="btn secondary-btn small-btn" style="background: var(--danger-100); color: var(--danger-600);" onclick="event.stopPropagation(); deletePunchList('${pl.id}')">Delete</button>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+  }
+  
+  // Render list view
+  const tableBody = document.getElementById('punchListTableBody');
+  if (tableBody) {
+    if (activePunchLists.length === 0) {
+      tableBody.innerHTML = '';
+    } else {
+      tableBody.innerHTML = activePunchLists.map(pl => {
+        const progress = calculatePunchListProgress(pl);
+        const createdByName = usersCache.find(u => u.email === pl.createdBy)?.name || pl.createdBy;
+        
+        return `
+          <tr style="border-bottom: 1px solid var(--gray-200);">
+            <td style="padding: 1rem; font-weight: bold;">${pl.punchListId}</td>
+            <td style="padding: 1rem;">${pl.name}</td>
+            <td style="padding: 1rem;">${pl.visibility}</td>
+            <td style="padding: 1rem;">${progress}%</td>
+            <td style="padding: 1rem;">${createdByName}</td>
+            <td style="padding: 1rem;">${pl.createdDate} ${pl.createdTime}</td>
+            <td style="padding: 1rem;">
+              <button class="btn secondary-btn small-btn" onclick="openViewPunchListModal('${pl.id}')">View</button>
+              ${pl.createdBy === currentUser.email ? `
+                <button class="btn secondary-btn small-btn" onclick="openEditPunchListModal('${pl.id}')">Edit</button>
+                <button class="btn secondary-btn small-btn" onclick="archivePunchList('${pl.id}')">Archive</button>
+              ` : ''}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+  }
+  
+  // Render archived punch lists
+  const archivedContainer = document.getElementById('archivedPunchListsList');
+  if (archivedContainer) {
+    if (archivedPunchLists.length === 0) {
+      archivedContainer.innerHTML = '';
+    } else {
+      archivedContainer.innerHTML = archivedPunchLists.map(pl => {
+        const progress = calculatePunchListProgress(pl);
+        const createdByName = usersCache.find(u => u.email === pl.createdBy)?.name || pl.createdBy;
+        
+        return `
+          <div class="user-card">
+            <h3 style="margin-bottom: 0.5rem;">${pl.punchListId} (Archived)</h3>
+            <p style="font-weight: bold; margin-bottom: 0.5rem;">${pl.name}</p>
+            <div style="margin-bottom: 1rem;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                <span>Progress</span>
+                <span>${progress}%</span>
+              </div>
+              <div style="width: 100%; height: 8px; background: var(--gray-200); border-radius: 4px; overflow: hidden;">
+                <div style="width: ${progress}%; height: 100%; background: var(--primary-500);"></div>
+              </div>
+            </div>
+            <div style="margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--gray-600);">
+              <div><strong>Created by:</strong> ${createdByName}</div>
+              <div><strong>Visibility:</strong> ${pl.visibility}</div>
+            </div>
+            ${pl.createdBy === currentUser.email ? `
+              <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                <button class="btn secondary-btn small-btn" onclick="restorePunchList('${pl.id}')">Restore</button>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+  }
+}
+
+function openViewPunchListModal(punchListId) {
+  const punchList = punchListsCache.find(pl => pl.id === punchListId);
+  if (!punchList) return;
+  
+  const progress = calculatePunchListProgress(punchList);
+  const createdByName = usersCache.find(u => u.email === punchList.createdBy)?.name || punchList.createdBy;
+  
+  const content = document.getElementById('viewPunchListContent');
+  if (!content) return;
+  
+  content.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+      <div>
+        <h2 style="color: var(--primary); margin:0;">${punchList.punchListId}</h2>
+        <p style="font-size: 1.25rem; font-weight: bold; margin: 0.5rem 0 1rem 0;">${punchList.name}</p>
+      </div>
+      <span class="task-status" style="background: var(--gray-100); color: var(--gray-700);">${punchList.visibility}</span>
+    </div>
+    ${punchList.description ? `<p style="margin-bottom: 1rem; white-space: pre-wrap;">${punchList.description}</p>` : ''}
+    <div style="margin-bottom: 1.5rem;">
+      <h3 style="margin-bottom: 1rem;">Progress: ${progress}%</h3>
+      <div style="width: 100%; height: 16px; background: var(--gray-200); border-radius: 8px; overflow: hidden;">
+        <div style="width: ${progress}%; height: 100%; background: var(--primary-500);"></div>
+      </div>
+    </div>
+    <h4 style="margin-bottom: 1rem;">Items</h4>
+    ${(punchList.items || []).length === 0 ? `
+      <p style="color: var(--gray-500);">No items yet.</p>
+    ` : `
+      <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+        ${(punchList.items || []).map((item, index) => `
+          <div style="display: flex; gap: 0.75rem; align-items: start; padding: 0.75rem; background: var(--gray-50); border-radius: 0.5rem;">
+            <input type="checkbox" ${item.completed ? 'checked' : ''} 
+                   style="transform: scale(1.5); margin-top: 0.25rem;"
+                   ${punchList.createdBy !== currentUser.email ? 'disabled' : ''}
+                   onchange="togglePunchListItem('${punchList.id}', '${item.id}', this.checked)">
+            <div style="flex: 1;">
+              <div style="font-weight: ${item.completed ? 'normal' : 'bold'}; text-decoration: ${item.completed ? 'line-through' : 'none'}; color: ${item.completed ? 'var(--gray-500)' : 'inherit'};">
+                ${index + 1}. ${item.description}
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `}
+    <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--gray-200); display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+      <div><strong>Created by:</strong> ${createdByName}</div>
+      <div><strong>Created on:</strong> ${punchList.createdDate} ${punchList.createdTime}</div>
+      <div><strong>Last updated:</strong> ${punchList.lastUpdatedDate || 'N/A'} ${punchList.lastUpdatedTime || ''}</div>
+    </div>
+  `;
+  
+  document.getElementById('viewPunchListModal').classList.remove('hidden');
+}
+
+window.togglePunchListItem = async function(punchListId, itemId, completed) {
+  const punchList = punchListsCache.find(pl => pl.id === punchListId);
+  if (!punchList) return;
+  
+  // Check if current user is the creator
+  if (punchList.createdBy !== currentUser.email) {
+    alert('Only the creator can update checklist items!');
+    return;
+  }
+  
+  // Update the cache immediately for instant UI feedback
+  const updatedItems = (punchList.items || []).map(item => 
+    item.id === itemId ? { ...item, completed } : item
+  );
+  punchList.items = updatedItems;
+  
+  // Re-render the modal content if it's open
+  if (!document.getElementById('viewPunchListModal').classList.contains('hidden')) {
+    openViewPunchListModal(punchListId);
+  }
+  
+  // Update Firestore
+  const now = new Date();
+  const date = now.toISOString().split('T')[0];
+  const time = now.toTimeString().split(' ')[0].substring(0, 5);
+  
+  await db.collection('groups').doc(currentGroup).collection('punchLists').doc(punchListId).update({
+    items: updatedItems,
+    lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    lastUpdatedDate: date,
+    lastUpdatedTime: time
+  });
+}
+
+window.archivePunchList = async function(punchListId) {
+  if (!confirm('Are you sure you want to archive this punch list?')) return;
+  
+  const now = new Date();
+  const date = now.toISOString().split('T')[0];
+  const time = now.toTimeString().split(' ')[0].substring(0, 5);
+  
+  await db.collection('groups').doc(currentGroup).collection('punchLists').doc(punchListId).update({
+    status: 'archived',
+    lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    lastUpdatedDate: date,
+    lastUpdatedTime: time
+  });
+}
+
+window.restorePunchList = async function(punchListId) {
+  const now = new Date();
+  const date = now.toISOString().split('T')[0];
+  const time = now.toTimeString().split(' ')[0].substring(0, 5);
+  
+  await db.collection('groups').doc(currentGroup).collection('punchLists').doc(punchListId).update({
+    status: 'active',
+    lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    lastUpdatedDate: date,
+    lastUpdatedTime: time
+  });
+}
+
+window.deletePunchList = async function(punchListId) {
+  if (!confirm('Are you sure you want to delete this punch list? This cannot be undone!')) return;
+  
+  await db.collection('groups').doc(currentGroup).collection('punchLists').doc(punchListId).delete();
+  alert('Punch list deleted successfully!');
 }
 
 
