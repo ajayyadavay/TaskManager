@@ -91,6 +91,7 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
             <span id="notificationBadge" class="notification-badge hidden">0</span>
           </button>
           <button id="adminNavUsers" class="nav-item hidden" data-section="users">Users</button>
+          <button id="adminNavProject" class="nav-item hidden" data-section="projects">Project</button>
         </aside>
 
         <main class="main-content">
@@ -167,6 +168,18 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
                 </select>
                 <select id="taskSecondaryFilter">
                   <option value="">All Secondary Users</option>
+                </select>
+                <select id="taskPriorityFilter">
+                  <option value="">All Priority</option>
+                  <option value="High">High</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Low">Low</option>
+                </select>
+                <select id="taskCategoryFilter">
+                  <option value="">All Categories</option>
+                </select>
+                <select id="taskProjectFilter">
+                  <option value="">All Projects</option>
                 </select>
                 <input type="date" id="taskDateFilter" placeholder="Assigned Date">
                 <input type="date" id="taskDeadlineFilter" placeholder="Deadline Date">
@@ -300,6 +313,35 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
               <div id="invitedUsersList" class="users-grid"></div>
             </div>
           </section>
+          
+          <!-- Projects Section (Admin Only) -->
+          <section id="projectsSection" class="section hidden">
+            <div class="section-header">
+              <h2>Project Management</h2>
+            </div>
+            <div class="project-counts">
+              <p><strong>Total Categories:</strong> <span id="totalCategoriesCount">0</span></p>
+              <p><strong>Total Projects:</strong> <span id="totalProjectsCount">0</span></p>
+            </div>
+            
+            <!-- Project Categories -->
+            <div class="user-management-section">
+              <div class="section-header" style="margin-bottom: 1rem;">
+                <h3>Project Categories</h3>
+                <button id="createCategoryBtn" class="btn primary-btn">Create New Category</button>
+              </div>
+              <div id="categoriesList" class="users-grid"></div>
+            </div>
+            
+            <!-- Project Names -->
+            <div class="user-management-section">
+              <div class="section-header" style="margin-bottom: 1rem;">
+                <h3>Project Names</h3>
+                <button id="createProjectBtn" class="btn primary-btn">Create New Project</button>
+              </div>
+              <div id="projectsList" class="users-grid"></div>
+            </div>
+          </section>
         </main>
       </div>
     </div>
@@ -335,13 +377,36 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
         </div>
         <div class="form-row">
           <div class="input-group">
+            <label for="taskCategory">Project Category</label>
+            <select id="taskCategory" required>
+              <option value="">Select Project Category</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label for="taskProject">Project Name</label>
+            <select id="taskProject" required>
+              <option value="">Select Project Name</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="input-group">
+            <label for="taskPriority">Priority</label>
+            <select id="taskPriority" required>
+              <option value="">Select Priority</option>
+              <option value="High">High</option>
+              <option value="Medium">Medium</option>
+              <option value="Low">Low</option>
+            </select>
+          </div>
+          <div class="input-group">
             <label for="taskDuration">Duration (days)</label>
             <input type="number" id="taskDuration" min="1" required placeholder="e.g., 7">
           </div>
-          <div class="input-group">
-            <label for="taskRemarks">Remarks</label>
-            <input type="text" id="taskRemarks" placeholder="Additional notes">
-          </div>
+        </div>
+        <div class="input-group">
+          <label for="taskRemarks">Remarks</label>
+          <input type="text" id="taskRemarks" placeholder="Additional notes">
         </div>
         <button type="submit" class="btn primary-btn" style="width: 100%;">Save Task</button>
       </form>
@@ -399,6 +464,38 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
           <input type="text" id="issueRemarks" placeholder="Additional notes">
         </div>
         <button type="submit" class="btn primary-btn" style="width: 100%;">Submit Issue</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Create/Edit Category Modal -->
+  <div id="categoryModal" class="modal hidden">
+    <div class="modal-content">
+      <span class="close-btn">&times;</span>
+      <h3 id="categoryModalTitle">Create New Category</h3>
+      <form id="categoryForm">
+        <input type="hidden" id="categoryId">
+        <div class="input-group">
+          <label for="categoryName">Category Name</label>
+          <input type="text" id="categoryName" required placeholder="Enter category name">
+        </div>
+        <button type="submit" class="btn primary-btn" style="width: 100%;">Save Category</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Create/Edit Project Modal -->
+  <div id="projectModal" class="modal hidden">
+    <div class="modal-content">
+      <span class="close-btn">&times;</span>
+      <h3 id="projectModalTitle">Create New Project</h3>
+      <form id="projectForm">
+        <input type="hidden" id="projectId">
+        <div class="input-group">
+          <label for="projectName">Project Name</label>
+          <input type="text" id="projectName" required placeholder="Enter project name">
+        </div>
+        <button type="submit" class="btn primary-btn" style="width: 100%;">Save Project</button>
       </form>
     </div>
   </div>

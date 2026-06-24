@@ -703,6 +703,92 @@ body {
   margin-top: var(--space-1);
 }
 
+/*.trail-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--gray-200);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.trail-action {
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.trail-user {
+  font-weight: 500;
+}
+
+.trail-datetime {
+  color: var(--gray-500);
+  font-size: 0.8rem;
+}
+
+.trail-details {
+  color: var(--gray-700);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}*/
+
+/*Trail Section*/
+.trail-content {
+  display: none;
+}
+
+.trail-content.expanded {
+  display: block;
+}
+
+.trail-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.trail-table th,
+.trail-table td {
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  text-align: left;
+  vertical-align: top;
+}
+
+.trail-table th {
+  background: #f8fafc;
+  font-weight: 600;
+}
+
+.trail-table td:nth-child(1) {
+  width: 140px;
+}
+
+.trail-table td:nth-child(2) {
+  width: 160px;
+}
+
+.trail-table td:nth-child(3) {
+  width: 180px;
+  white-space: nowrap;
+}
+
+.trail-table td:nth-child(4) {
+  word-break: break-word;
+}
+
+.trail-arrow {
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.2s ease;
+}
+
+.trail-header:hover .trail-arrow {
+  opacity: 0.8;
+}
+
 .progress-update {
   background: var(--gray-50);
   padding: var(--space-4);
@@ -1200,6 +1286,27 @@ body {
     transition:.2s ease;
 }
 
+.project-counts {
+  display: flex;
+  gap: 2rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.5rem;
+  background: white;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-xl);
+}
+
+.project-counts p {
+  font-size: 0.9375rem;
+  color: var(--gray-600);
+  margin: 0;
+}
+
+.project-counts strong {
+  color: var(--primary);
+  font-weight: 600;
+}
+
 .filter-row select:focus,
 .filter-row input[type="date"]:focus{
     outline:none;
@@ -1508,6 +1615,17 @@ body {
   color:#8b5cf6;
 }
 
+.metric-rejected{
+  background:#fff5f5;
+}
+.metric-rejected .metric-icon{
+  background:#fecaca;
+  color:#dc2626;
+}
+.metric-rejected .metric-number{
+  color:#dc2626;
+}
+
 .metric-completed{
   background:#f0fdfa;
 }
@@ -1518,7 +1636,7 @@ body {
 .metric-completed .metric-number{
   color:#14b8a6;
 }
-
+/*
 .metric-closed{
   background:#fff5f5;
 }
@@ -1528,6 +1646,19 @@ body {
 }
 .metric-closed .metric-number{
   color:#ef4444;
+}*/
+
+.metric-closed {
+  background: #ecfdf5;
+}
+
+.metric-closed .metric-icon {
+  background: #a7f3d0;
+  color: #059669;
+}
+
+.metric-closed .metric-number {
+  color: #059669;
 }
 
 .issue-total{

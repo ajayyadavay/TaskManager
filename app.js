@@ -23,6 +23,8 @@ let usersCache = [];
 let currentUserData = null;
 let tasksCache = [];
 let issuesCache = [];
+let categoriesCache = [];
+let projectsCache = [];
 let deadlineOperator = '=';
 
 const FINISHED_TASK_STATUSES = new Set(['completed', 'closed', 'rejected']);
@@ -66,6 +68,8 @@ function setupEventListeners() {
   document.getElementById('createTaskBtn').addEventListener('click', () => openTaskModal());
   document.getElementById('inviteUserBtn').addEventListener('click', openInviteUserModal);
   document.getElementById('createIssueBtn').addEventListener('click', openIssueModal);
+  document.getElementById('createCategoryBtn')?.addEventListener('click', () => openCategoryModal());
+  document.getElementById('createProjectBtn')?.addEventListener('click', () => openProjectModal());
   
   // Nav items
   document.querySelectorAll('.nav-item').forEach(item => {
@@ -122,6 +126,8 @@ function setupEventListeners() {
   document.getElementById('taskForm').addEventListener('submit', handleSaveTask);
   document.getElementById('inviteUserForm').addEventListener('submit', handleInviteUser);
   document.getElementById('issueForm').addEventListener('submit', handleSubmitIssue);
+  document.getElementById('categoryForm')?.addEventListener('submit', handleSaveCategory);
+  document.getElementById('projectForm')?.addEventListener('submit', handleSaveProject);
 
   // User profile dropdown
   document.getElementById('userProfile').addEventListener('click', (e) => {
@@ -134,7 +140,7 @@ function setupEventListeners() {
   });
 
   // Search and filter events
-  ['taskSearch', 'taskStatusFilter', 'taskPrimaryFilter', 'taskSecondaryFilter', 'taskDateFilter', 'taskDeadlineFilter', 'taskRemainingDaysFilter'].forEach(id => {
+  ['taskSearch', 'taskStatusFilter', 'taskPrimaryFilter', 'taskSecondaryFilter', 'taskDateFilter', 'taskDeadlineFilter', 'taskRemainingDaysFilter', 'taskPriorityFilter', 'taskCategoryFilter', 'taskProjectFilter'].forEach(id => {
     const el = document.getElementById(id);
     if (el) {
       el.addEventListener('input', () => {
@@ -208,6 +214,9 @@ function clearAllTaskFilters() {
   document.getElementById('taskDateFilter').value = '';
   document.getElementById('taskDeadlineFilter').value = '';
   document.getElementById('taskRemainingDaysFilter').value = '';
+  document.getElementById('taskPriorityFilter').value = '';
+  document.getElementById('taskCategoryFilter').value = '';
+  document.getElementById('taskProjectFilter').value = '';
   
   updateActiveFilters();
   loadTasks(document.querySelector('.tab-btn.active')?.dataset.tab || 'all');
@@ -222,6 +231,9 @@ function updateActiveFilters() {
   const dateVal = document.getElementById('taskDateFilter').value;
   const deadlineVal = document.getElementById('taskDeadlineFilter').value;
   const remainingDaysVal = document.getElementById('taskRemainingDaysFilter').value.trim();
+  const priorityVal = document.getElementById('taskPriorityFilter')?.value;
+  const categoryVal = document.getElementById('taskCategoryFilter')?.value;
+  const projectVal = document.getElementById('taskProjectFilter')?.value;
   
   const activeFiltersList = document.getElementById('activeFiltersList');
   const filtersCountSpan = document.querySelector('.filters-count');
@@ -310,6 +322,38 @@ function updateActiveFilters() {
     });
   }
   
+  // Add priority filter
+  if (priorityVal) {
+    activeFilters.push({
+      type: 'priority',
+      value: priorityVal,
+      label: 'Priority: ' + priorityVal,
+      icon: priorityVal === 'High' ? '🔴' : priorityVal === 'Medium' ? '🟡' : '🟢'
+    });
+  }
+  
+  // Add category filter
+  if (categoryVal) {
+    const category = categoriesCache.find(c => c.id === categoryVal);
+    activeFilters.push({
+      type: 'category',
+      value: categoryVal,
+      label: 'Category: ' + (category?.name || categoryVal),
+      icon: '📁'
+    });
+  }
+  
+  // Add project filter
+  if (projectVal) {
+    const project = projectsCache.find(p => p.id === projectVal);
+    activeFilters.push({
+      type: 'project',
+      value: projectVal,
+      label: 'Project: ' + (project?.name || projectVal),
+      icon: '📋'
+    });
+  }
+  
   // Update UI
   filtersCountSpan.textContent = `Filters (${activeFilters.length})`;
   
@@ -379,6 +423,15 @@ window.removeActiveFilter = function(type, value) {
       break;
     case 'remaining-days':
       document.getElementById('taskRemainingDaysFilter').value = '';
+      break;
+    case 'priority':
+      document.getElementById('taskPriorityFilter').value = '';
+      break;
+    case 'category':
+      document.getElementById('taskCategoryFilter').value = '';
+      break;
+    case 'project':
+      document.getElementById('taskProjectFilter').value = '';
       break;
   }
   
@@ -783,10 +836,12 @@ async function loadGroup(groupName) {
       document.getElementById('createTaskBtn').classList.remove('hidden');
       document.getElementById('inviteUserBtn').classList.remove('hidden');
       document.getElementById('adminNavUsers').classList.remove('hidden');
+      document.getElementById('adminNavProject').classList.remove('hidden');
     } else {
       document.getElementById('createTaskBtn').classList.add('hidden');
       document.getElementById('inviteUserBtn').classList.add('hidden');
       document.getElementById('adminNavUsers').classList.add('hidden');
+      document.getElementById('adminNavProject').classList.add('hidden');
     }
 
     await loadUsers();
@@ -843,6 +898,26 @@ function setupRealtimeListeners() {
       if (!document.getElementById('deadlinesSection').classList.contains('hidden')) {
         loadDeadlineTasks();
       }
+    });
+
+  // Listen for categories changes
+  db.collection('groups').doc(currentGroup).collection('categories')
+    .orderBy('createdAt', 'desc')
+    .onSnapshot(snapshot => {
+      categoriesCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      populateCategoryProjectFilters();
+      renderCategoriesList();
+      updateCounts();
+    });
+
+  // Listen for projects changes
+  db.collection('groups').doc(currentGroup).collection('projects')
+    .orderBy('createdAt', 'desc')
+    .onSnapshot(snapshot => {
+      projectsCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      populateCategoryProjectFilters();
+      renderProjectsList();
+      updateCounts();
     });
   
   // Listen for notifications for the current user
@@ -997,15 +1072,18 @@ window.updateProgress = async function(taskId) {
 // Also update verify progress to send notification
 window.verifyProgress = async function(taskId) {
   const task = tasksCache.find(t => t.id === taskId);
-  const progress = [...task.progress];
-  progress[progress.length - 1].verifiedByPrimary = true;
+  const note = document.getElementById('primaryNote')?.value.trim();
   
   const now = new Date();
   const date = now.toISOString().split('T')[0];
   const time = now.toTimeString().split(' ')[0].substring(0, 5);
   
-  await db.collection('groups').doc(currentGroup).collection('tasks').doc(taskId).update({
-    progress,
+  const progressUpdates = [...task.progress];
+  // Mark last progress as verified
+  progressUpdates[progressUpdates.length - 1].verifiedByPrimary = true;
+  
+  const updates = {
+    progress: progressUpdates,
     trail: firebase.firestore.FieldValue.arrayUnion({
       action: 'Progress Verified',
       user: currentUser.email,
@@ -1013,7 +1091,22 @@ window.verifyProgress = async function(taskId) {
       time,
       details: 'Primary user verified progress'
     })
-  });
+  };
+  
+  // If note exists, add new progress item for verification
+  if (note) {
+    updates.progress = firebase.firestore.FieldValue.arrayUnion({
+      user: currentUser.email,
+      date,
+      time,
+      description: note,
+      status: 'verified',
+      type: 'verification_note',
+      verifiedByPrimary: true
+    });
+  }
+  
+  await db.collection('groups').doc(currentGroup).collection('tasks').doc(taskId).update(updates);
   
   // Send notification to admin or secondary user
   const taskDisplayId = task?.taskId || taskId;
@@ -1126,6 +1219,9 @@ function populateUserFilters() {
     usersCache.map(u => `<option value="${u.email}">${u.name}</option>`).join('');
   reportedByFilter.innerHTML = '<option value="">All Reporters</option>' +
     usersCache.map(u => `<option value="${u.email}">${u.name}</option>`).join('');
+  
+  // Populate category and project filters/selects
+  populateCategoryProjectFilters();
 }
 
 function showLogin() {
@@ -1174,7 +1270,8 @@ function renderDashboardStats() {
     wip: 0,
     partiallyCompleted: 0,
     completed: 0,
-    closed: 0
+    closed: 0,
+    rejected: 0
   };
   
   getVisibleTasksForCurrentUser(tasksCache).forEach(task => {
@@ -1186,6 +1283,7 @@ function renderDashboardStats() {
     if (dashboardStatus === 'partially_completed') taskStats.partiallyCompleted++;
     if (dashboardStatus === 'completed') taskStats.completed++;
     if (dashboardStatus === 'closed') taskStats.closed++;
+    if (dashboardStatus === 'rejected') taskStats.rejected++;
     /*if (dashboardStatus === 'work_in_progress' || dashboardStatus === 'partially_completed') taskStats.wip++;
     if (dashboardStatus === 'completed' || dashboardStatus === 'closed') taskStats.completed++;*/
   });
@@ -1298,6 +1396,12 @@ document.getElementById('tasksMetricsGrid').innerHTML = `
   <div class="metric-label">Partially Completed</div>
 </div>
 
+<div class="metric-card metric-rejected">
+  <div class="metric-icon"><i class="fas fa-ban"></i></div>
+  <div class="metric-number">${taskStats.rejected}</div>
+  <div class="metric-label">Rejected Tasks</div>
+</div>
+
 <div class="metric-card metric-completed">
   <div class="metric-icon"><i class="fas fa-flag"></i></div>
   <div class="metric-number">${taskStats.completed}</div>
@@ -1351,6 +1455,9 @@ function loadTasks(tab) {
   const dateFilter = document.getElementById('taskDateFilter').value;
   const deadlineFilter = document.getElementById('taskDeadlineFilter').value;
   const remainingDaysFilter = document.getElementById('taskRemainingDaysFilter').value.trim();
+  const priorityFilter = document.getElementById('taskPriorityFilter')?.value;
+  const categoryFilter = document.getElementById('taskCategoryFilter')?.value;
+  const projectFilter = document.getElementById('taskProjectFilter')?.value;
 
   if (searchTerm) {
     tasks = tasks.filter(t => 
@@ -1387,6 +1494,18 @@ function loadTasks(tab) {
         return remaining === remainingDays;
       });
     }
+  }
+  
+  if (priorityFilter) {
+    tasks = tasks.filter(t => t.priority === priorityFilter);
+  }
+  
+  if (categoryFilter) {
+    tasks = tasks.filter(t => t.categoryId === categoryFilter);
+  }
+  
+  if (projectFilter) {
+    tasks = tasks.filter(t => t.projectId === projectFilter);
   }
 
   document.getElementById('tasksList').innerHTML = tasks.map(task => renderTaskCard(task)).join('');
@@ -1561,12 +1680,17 @@ function renderTaskCard(task) {
     <div class="task-card">
       <div class="task-header">
         <div class="task-id">${task.taskId}</div>
-        <div class="task-status ${statusClass}">${task.status.replace('_', ' ')}</div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          ${task.priority ? `<span class="task-status" style="background: ${task.priority === 'High' ? '#fee2e2' : task.priority === 'Medium' ? '#fef3c7' : '#d1fae5'}; color: ${task.priority === 'High' ? '#dc2626' : task.priority === 'Medium' ? '#d97706' : '#059669'}">Priority: ${task.priority}</span>` : ''}
+          <div class="task-status ${statusClass}">${task.status.replace('_', ' ')}</div>
+        </div>
       </div>
       <p style="margin-bottom: 1rem;">${task.description}</p>
       <div class="task-meta">
         <span><strong>Primary:</strong> ${primaryUser?.name || task.primaryUser}</span>
         ${secondaryUser ? `<span><strong>Secondary:</strong> ${secondaryUser?.name || task.secondaryUser}</span>` : ''}
+        ${task.categoryName ? `<span><strong>Category:</strong> ${task.categoryName}</span>` : ''}
+        ${task.projectName ? `<span><strong>Project:</strong> ${task.projectName}</span>` : ''}
         <span><strong>Deadline:</strong> ${task.deadline}</span>
         <span><strong>Remaining:</strong> ${remaining} days</span>
       </div>
@@ -1585,11 +1709,17 @@ function openTaskModal(issueData = null) {
   // Populate user selects
   const primarySelect = document.getElementById('taskPrimary');
   const secondarySelect = document.getElementById('taskSecondary');
+  const categorySelect = document.getElementById('taskCategory');
+  const projectSelect = document.getElementById('taskProject');
   
   primarySelect.innerHTML = '<option value="">Select Primary User</option>' +
     usersCache.map(u => `<option value="${u.email}">${u.name} (${u.email})</option>`).join('');
   secondarySelect.innerHTML = '<option value="">Select Secondary User (Optional)</option>' +
     usersCache.map(u => `<option value="${u.email}">${u.name} (${u.email})</option>`).join('');
+  categorySelect.innerHTML = '<option value="">Select Project Category</option>' +
+    categoriesCache.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  projectSelect.innerHTML = '<option value="">Select Project Name</option>' +
+    projectsCache.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
   
   // If issue data provided, prefill task form
   if (issueData) {
@@ -1620,6 +1750,9 @@ async function handleSaveTask(e) {
   const description = document.getElementById('taskDescription').value.trim();
   const primaryUser = document.getElementById('taskPrimary').value;
   const secondaryUser = document.getElementById('taskSecondary').value;
+  const categoryId = document.getElementById('taskCategory').value;
+  const projectId = document.getElementById('taskProject').value;
+  const priority = document.getElementById('taskPriority').value;
   const duration = parseInt(document.getElementById('taskDuration').value);
   const remarks = document.getElementById('taskRemarks').value.trim();
 
@@ -1629,6 +1762,10 @@ async function handleSaveTask(e) {
   const deadline = new Date(now);
   deadline.setDate(deadline.getDate() + duration);
   const deadlineStr = deadline.toISOString().split('T')[0];
+
+  // Get category and project names
+  const category = categoriesCache.find(c => c.id === categoryId);
+  const project = projectsCache.find(p => p.id === projectId);
 
   const trail = [{
     action: 'Task Created',
@@ -1645,6 +1782,11 @@ async function handleSaveTask(e) {
       description,
       primaryUser,
       secondaryUser: secondaryUser || null,
+      categoryId,
+      categoryName: category?.name,
+      projectId,
+      projectName: project?.name,
+      priority,
       duration,
       remarks,
       assignedDate,
@@ -1712,24 +1854,93 @@ async function openViewTaskModal(taskId) {
     progressToShow = task.progress.filter(p => p.verifiedByPrimary === true);
   }
 
-  let progressHtml = progressToShow.map(p => `
-    <div class="progress-update">
-      <div class="update-header">
-        <strong>${usersCache.find(u => u.email === p.user)?.name || p.user}</strong>
-        <span>${p.date} ${p.time}</span>
+  let progressHtml = progressToShow.map(p => {
+    const isPrimary = p.user === task.primaryUser;
+    const isVerificationNote = p.type === 'verification_note';
+    const backgroundColor = isPrimary ? '#e0f2fe' : '#f3f4f6';
+    const borderColor = isPrimary ? '#0ea5e9' : '#d1d5db';
+    const headerColor = isPrimary ? '#0369a1' : '#374151';
+    
+    return `
+      <div class="progress-update" style="background: ${backgroundColor}; border-left: 4px solid ${borderColor};">
+        <div class="update-header">
+          <strong style="color: ${headerColor};">
+            ${usersCache.find(u => u.email === p.user)?.name || p.user}
+            ${p.type && p.type !== 'verification_note' ? `(${p.type.replace('_', ' ')})` : ''}
+          </strong>
+          <span>${p.date} ${p.time}</span>
+        </div>
+        ${!isVerificationNote && p.status ? `<p><strong>Status:</strong> ${p.status.replace('_', ' ')}</p>` : ''}
+        <p>${isVerificationNote ? `<Strong>Verification Note:</Strong> ${p.description}` : p.description}</p>
       </div>
-      <p><strong>Status:</strong> ${p.status.replace('_', ' ')}</p>
-      <p>${p.description}</p>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 
-  let trailHtml = task.trail.map(t => `
+ /* let trailHtml = task.trail.map(t => `
     <div class="trail-item">
       <div><strong>${t.action}</strong> by ${usersCache.find(u => u.email === t.user)?.name || t.user}</div>
       <div class="trail-date">${t.date} ${t.time}</div>
       <div>${t.details}</div>
     </div>
-  `).join('');
+  `).join('');*/
+
+  /*let trailHtml = task.trail.map(t => `
+  <div class="trail-item">
+    <span class="trail-action">${t.action}</span>
+    <span class="trail-user">${usersCache.find(u => u.email === t.user)?.name || t.user}</span>
+    <span class="trail-datetime">${t.date} ${t.time}</span>
+    <span class="trail-details">${t.details}</span>
+  </div>
+`).join('');*/
+
+//Trail in collapsible table showing only the last entry
+const latestTrail = task.trail[task.trail.length - 1];
+
+let trailHtml = `
+<div class="trail-section">
+
+  <div class="trail-header"
+       onclick="toggleTrail(this)">
+    <span>
+      Activity Trail (${task.trail.length})
+    </span>
+    <span class="trail-arrow">▼</span>
+  </div>
+
+  <div class="trail-latest">
+    <strong>${latestTrail.action}</strong> |
+    ${usersCache.find(u => u.email === latestTrail.user)?.name || latestTrail.user}
+    |
+    ${latestTrail.date} ${latestTrail.time}
+    |
+    ${latestTrail.details}
+  </div>
+
+  <div class="trail-content">
+    <table class="trail-table">
+      <thead>
+        <tr>
+          <th>Action</th>
+          <th>User</th>
+          <th>Date & Time</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${task.trail.map(t => `
+          <tr>
+            <td>${t.action}</td>
+            <td>${usersCache.find(u => u.email === t.user)?.name || t.user}</td>
+            <td>${t.date} ${t.time}</td>
+            <td>${t.details}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+`;
   
   // Assignment history (only visible to admins)
   let assignmentHistoryHtml = '';
@@ -1739,8 +1950,18 @@ async function openViewTaskModal(taskId) {
         <h4>Assignment History</h4>
         ${task.assignmentHistory.map(h => `
           <div class="trail-item">
-            <div><strong>Task Reassigned</strong> from ${usersCache.find(u => u.email === h.previousAssignee)?.name || h.previousAssignee} to ${usersCache.find(u => u.email === h.newAssignee)?.name || h.newAssignee}</div>
-            <div class="trail-date">${h.date} ${h.time}</div>
+            <div>
+  <div>
+  <strong>Task Reassigned</strong> from
+  <span style="color:#dc2626;font-weight:600;">
+    ${usersCache.find(u => u.email === h.previousAssignee)?.name || h.previousAssignee}
+  </span>
+  to
+  <span style="color:#16a34a;font-weight:600;">
+    ${usersCache.find(u => u.email === h.newAssignee)?.name || h.newAssignee}
+  </span>
+  on ${h.date} ${h.time}
+</div>
           </div>
         `).join('')}
       </div>
@@ -1750,9 +1971,15 @@ async function openViewTaskModal(taskId) {
   let actionsHtml = '';
   if (task.status === 'pending' && isPrimary) {
     actionsHtml = `
-      <div style="margin-top: 1.5rem; display: flex; gap: 0.75rem;">
-        <button class="btn primary-btn" style="flex:1;" onclick="acceptTask('${task.id}')">Accept Task</button>
-        <button class="btn secondary-btn" style="flex:1;" onclick="rejectTask('${task.id}')">Reject Task</button>
+      <div style="margin-top: 1.5rem;">
+        <div class="input-group" style="margin-bottom: 1rem;">
+          <label for="primaryNote">Note from Primary User (optional)</label>
+          <textarea id="primaryNote" rows="2" placeholder="Enter your note..." style="width:100%;"></textarea>
+        </div>
+        <div style="display: flex; gap: 0.75rem;">
+          <button class="btn primary-btn" style="flex:1;" onclick="acceptTask('${task.id}')">Accept Task</button>
+          <button class="btn secondary-btn" style="flex:1;" onclick="rejectTask('${task.id}')">Reject Task</button>
+        </div>
       </div>
     `;
   } else if (isSecondary && (task.status === 'accepted' || task.status === 'work_in_progress' || task.status === 'partially_completed')) {
@@ -1779,6 +2006,10 @@ async function openViewTaskModal(taskId) {
     if (lastProgress.verifiedByPrimary !== true) {
       actionsHtml = `
         <div style="margin-top: 1.5rem;">
+          <div class="input-group" style="margin-bottom: 1rem;">
+            <label for="primaryNote">Verification Note (optional)</label>
+            <textarea id="primaryNote" rows="2" placeholder="Enter your verification note..." style="width:100%;"></textarea>
+          </div>
           <button class="btn primary-btn" style="width:100%;" onclick="verifyProgress('${task.id}')">Verify Latest Progress</button>
         </div>
       `;
@@ -1790,17 +2021,17 @@ async function openViewTaskModal(taskId) {
     if (!isTaskFinished(task)) {
       actionsHtml = (actionsHtml || '') + `
         <div style="margin-top: 1.5rem; border-top: 1px solid var(--gray-200); padding-top: 1.5rem;">
-          <h4 style="margin-bottom: 1rem;">Extend Deadline</h4>
+          <h4 style="margin-bottom: 1rem;">Extend/Shorten Deadline</h4>
           <div class="input-group">
             <label for="extendDeadlineDays">Add More Days</label>
-            <input type="number" id="extendDeadlineDays" min="1" value="1" placeholder="Enter number of days">
+            <input type="number" id="extendDeadlineDays" value="1" placeholder="Enter number of days">
           </div>
-          <button class="btn primary-btn" style="width:100%;" onclick="extendTaskDeadline('${task.id}')">Extend Deadline</button>
+          <button class="btn primary-btn" style="width:100%;" onclick="extendTaskDeadline('${task.id}')">Extend/Shorten Deadline</button>
         </div>
       `;
     }
 
-    if (task.status === 'completed') {
+    if (task.status === 'completed' || task.status === 'rejected') {
       actionsHtml = (actionsHtml || '') + `
         <div style="margin-top: 1.5rem;">
           <button class="btn primary-btn" style="width:100%;" onclick="closeTask('${task.id}')">Close Task</button>
@@ -1813,40 +2044,54 @@ async function openViewTaskModal(taskId) {
         <button class="btn secondary-btn" style="width:100%; background: var(--danger-100); color: var(--danger-600); border: none;" onclick="deleteTask('${task.id}')">Delete Task</button>
       </div>
     `;
-    // Admin reassignment
+    // Add "Create New Task from Task" button
     actionsHtml = (actionsHtml || '') + `
-      <div style="margin-top: 1.5rem; border-top: 1px solid var(--gray-200); padding-top: 1.5rem;">
-        <h4 style="margin-bottom: 1rem;">Reassign Task</h4>
-        <div class="input-group">
-          <label for="reassignPrimary">New Primary User</label>
-          <select id="reassignPrimary" style="width:100%;">
-            <option value="${task.primaryUser}">Current: ${primaryUser?.name || task.primaryUser}</option>
-            ${usersCache.map(u => `<option value="${u.email}">${u.name} (${u.email})</option>`).join('')}
-          </select>
-        </div>
-        <div class="input-group">
-          <label for="reassignSecondary">New Secondary User</label>
-          <select id="reassignSecondary" style="width:100%;">
-            <option value="">${secondaryUser ? 'Current: ' + secondaryUser.name : 'None'}</option>
-            <option value="">None</option>
-            ${usersCache.map(u => `<option value="${u.email}">${u.name} (${u.email})</option>`).join('')}
-          </select>
-        </div>
-        <button class="btn primary-btn" style="width:100%;" onclick="reassignTask('${task.id}')">Reassign Task</button>
+      <div style="margin-top: 1rem;">
+        <button class="btn primary-btn" style="width:100%;" onclick="openCreateTaskFromTask('${task.id}')">Create New Task from this Task</button>
       </div>
     `;
+     
+    // Admin reassignment (only if task is not rejected)
+    if (/*task.status !== 'rejected' &&*/ !isTaskFinished(task)) {
+      actionsHtml = (actionsHtml || '') + `
+        <div style="margin-top: 1.5rem; border-top: 1px solid var(--gray-200); padding-top: 1.5rem;">
+          <h4 style="margin-bottom: 1rem;">Reassign Task</h4>
+          <div class="input-group">
+            <label for="reassignPrimary">New Primary User</label>
+            <select id="reassignPrimary" style="width:100%;">
+              <option value="${task.primaryUser}">Current: ${primaryUser?.name || task.primaryUser}</option>
+              ${usersCache.map(u => `<option value="${u.email}">${u.name} (${u.email})</option>`).join('')}
+            </select>
+          </div>
+          <div class="input-group">
+            <label for="reassignSecondary">New Secondary User</label>
+            <select id="reassignSecondary" style="width:100%;">
+              <option value="">${secondaryUser ? 'Current: ' + secondaryUser.name : 'None'}</option>
+              <option value="">None</option>
+              ${usersCache.map(u => `<option value="${u.email}">${u.name} (${u.email})</option>`).join('')}
+            </select>
+          </div>
+          <button class="btn primary-btn" style="width:100%;" onclick="reassignTask('${task.id}')">Reassign Task</button>
+        </div>
+      `;
+    }
   }
 
   const content = document.getElementById('viewTaskContent');
   content.innerHTML = `
     <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
       <h2 style="color: var(--primary); margin:0;">${task.taskId}</h2>
-      <span class="task-status status-${task.status.replace('_', '-')}">${task.status.replace('_', ' ')}</span>
+      <div style="display: flex; gap: 0.5rem; align-items: center;">
+        ${task.priority ? `<span class="task-status" style="background: ${task.priority === 'High' ? '#fee2e2' : task.priority === 'Medium' ? '#fef3c7' : '#d1fae5'}; color: ${task.priority === 'High' ? '#dc2626' : task.priority === 'Medium' ? '#d97706' : '#059669'}">Priority: ${task.priority}</span>` : ''}
+        <span class="task-status status-${task.status.replace('_', '-')}">${task.status.replace('_', ' ')}</span>
+      </div>
     </div>
     <p style="margin-bottom: 1.25rem; font-size: 1rem; line-height: 1.6;">${task.description}</p>
     <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1.25rem;">
       <div><strong>Primary User:</strong> ${primaryUser?.name || task.primaryUser}</div>
       <div><strong>Secondary User:</strong> ${secondaryUser?.name || 'Not assigned'}</div>
+      <div><strong>Category:</strong> ${task.categoryName || 'Not assigned'}</div>
+      <div><strong>Project:</strong> ${task.projectName || 'Not assigned'}</div>
       <div><strong>Assigned On:</strong> ${task.assignedDate} ${task.assignedTime}</div>
       <div><strong>Deadline:</strong> ${task.deadline}</div>
       <div><strong>Duration:</strong> ${task.duration} days</div>
@@ -1871,15 +2116,29 @@ async function openViewTaskModal(taskId) {
   document.getElementById('viewTaskModal').classList.remove('hidden');
 }
 
+function toggleTrail(header) {
+  const section = header.closest('.trail-section');
+  const content = section.querySelector('.trail-content');
+  const arrow = header.querySelector('.trail-arrow');
+
+  content.classList.toggle('expanded');
+
+  arrow.textContent =
+    content.classList.contains('expanded')
+      ? '▲'
+      : '▼';
+}
+
 window.acceptTask = async function(taskId) {
   const task = tasksCache.find(t => t.id === taskId);
   const taskDisplayId = task?.taskId || taskId;
+  const note = document.getElementById('primaryNote')?.value.trim();
   
   const now = new Date();
   const date = now.toISOString().split('T')[0];
   const time = now.toTimeString().split(' ')[0].substring(0, 5);
   
-  await db.collection('groups').doc(currentGroup).collection('tasks').doc(taskId).update({
+  const updates = {
     status: 'accepted',
     trail: firebase.firestore.FieldValue.arrayUnion({
       action: 'Task Accepted',
@@ -1888,7 +2147,21 @@ window.acceptTask = async function(taskId) {
       time,
       details: 'User accepted the task'
     })
-  });
+  };
+  
+  if (note) {
+    updates.progress = firebase.firestore.FieldValue.arrayUnion({
+      user: currentUser.email,
+      date,
+      time,
+      description: note,
+      status: 'accepted',
+      type: 'accept_note',
+      verifiedByPrimary: true
+    });
+  }
+  
+  await db.collection('groups').doc(currentGroup).collection('tasks').doc(taskId).update(updates);
   
   // Send notification to secondary user if one is assigned
   if (task && task.secondaryUser && task.secondaryUser !== currentUser.email) {
@@ -1915,11 +2188,14 @@ window.acceptTask = async function(taskId) {
 }
 
 window.rejectTask = async function(taskId) {
+  const task = tasksCache.find(t => t.id === taskId);
+  const note = document.getElementById('primaryNote')?.value.trim();
+  
   const now = new Date();
   const date = now.toISOString().split('T')[0];
   const time = now.toTimeString().split(' ')[0].substring(0, 5);
   
-  await db.collection('groups').doc(currentGroup).collection('tasks').doc(taskId).update({
+  const updates = {
     status: 'rejected',
     trail: firebase.firestore.FieldValue.arrayUnion({
       action: 'Task Rejected',
@@ -1928,7 +2204,21 @@ window.rejectTask = async function(taskId) {
       time,
       details: 'User rejected the task'
     })
-  });
+  };
+  
+  if (note) {
+    updates.progress = firebase.firestore.FieldValue.arrayUnion({
+      user: currentUser.email,
+      date,
+      time,
+      description: note,
+      status: 'rejected',
+      type: 'reject_note',
+      verifiedByPrimary: true
+    });
+  }
+  
+  await db.collection('groups').doc(currentGroup).collection('tasks').doc(taskId).update(updates);
   
   document.getElementById('viewTaskModal').classList.add('hidden');
 }
@@ -1956,7 +2246,8 @@ window.extendTaskDeadline = async function(taskId) {
     return;
   }
 
-  if (Number.isNaN(extraDays) || extraDays < 1) {
+  /*if (Number.isNaN(extraDays) || extraDays < 1) {*/
+  if (Number.isNaN(extraDays)) {
     alert('Please enter a valid number of days to extend.');
     return;
   }
@@ -2025,10 +2316,15 @@ window.closeTask = async function(taskId) {
 }
 
 window.reassignTask = async function(taskId) {
+  const task = tasksCache.find(t => t.id === taskId);
+  
+  if (task.status === 'rejected') {
+    alert('Cannot reassign a rejected task! Please create a new task from it instead.');
+    return;
+  }
+  
   const newPrimary = document.getElementById('reassignPrimary').value;
   const newSecondary = document.getElementById('reassignSecondary').value;
-  
-  const task = tasksCache.find(t => t.id === taskId);
   
   const now = new Date();
   const date = now.toISOString().split('T')[0];
@@ -2061,6 +2357,34 @@ window.reassignTask = async function(taskId) {
   await db.collection('groups').doc(currentGroup).collection('tasks').doc(taskId).update(updates);
   
   document.getElementById('viewTaskModal').classList.add('hidden');
+}
+
+window.openCreateTaskFromTask = async function(taskId) {
+  const task = tasksCache.find(t => t.id === taskId);
+  if (!task) return;
+  
+  // Close view task modal
+  document.getElementById('viewTaskModal').classList.add('hidden');
+  
+  // Generate new task ID
+  const newTaskId = `${task.taskId} (Revised)`;
+  
+  // Open task modal and prefill
+  document.getElementById('taskModalTitle').textContent = 'Create New Task from Task';
+  
+  // Prefill form
+  document.getElementById('taskId').value = newTaskId;
+  document.getElementById('taskDescription').value = task.description;
+  document.getElementById('taskPrimary').value = task.primaryUser;
+  document.getElementById('taskSecondary').value = task.secondaryUser || '';
+  document.getElementById('taskCategory').value = task.categoryId || '';
+  document.getElementById('taskProject').value = task.projectId || '';
+  document.getElementById('taskPriority').value = task.priority || '';
+  document.getElementById('taskDuration').value = task.duration;
+  document.getElementById('taskRemarks').value = task.remarks || '';
+  
+  // Show task modal
+  document.getElementById('taskModal').classList.remove('hidden');
 }
 
 function openInviteUserModal() {
@@ -2137,6 +2461,358 @@ async function removeUser(email) {
     console.error('Remove user error:', error);
     alert('Failed to remove user: ' + error.message);
   }
+}
+
+function populateCategoryProjectFilters() {
+  // Populate task form selects
+  const categorySelect = document.getElementById('taskCategory');
+  const projectSelect = document.getElementById('taskProject');
+  const categoryFilter = document.getElementById('taskCategoryFilter');
+  const projectFilter = document.getElementById('taskProjectFilter');
+  
+  if (categorySelect) {
+    categorySelect.innerHTML = '<option value="">Select Project Category</option>' +
+      categoriesCache.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  }
+  
+  if (projectSelect) {
+    projectSelect.innerHTML = '<option value="">Select Project Name</option>' +
+      projectsCache.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  }
+  
+  if (categoryFilter) {
+    categoryFilter.innerHTML = '<option value="">All Categories</option>' +
+      categoriesCache.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  }
+  
+  if (projectFilter) {
+    projectFilter.innerHTML = '<option value="">All Projects</option>' +
+      projectsCache.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  }
+}
+
+function renderCategoriesList() {
+  const categoriesList = document.getElementById('categoriesList');
+  if (!categoriesList) return;
+  
+  if (categoriesCache.length === 0) {
+    categoriesList.innerHTML = '<p style="color: var(--gray-500); text-align: center; padding: 2rem;">No categories yet. Create one to get started!</p>';
+    return;
+  }
+  
+  categoriesList.innerHTML = categoriesCache.map(category => `
+    <div class="user-card">
+      <div class="user-info">
+        <h4>${category.name}</h4>
+      </div>
+      <div style="display: flex; gap: 0.5rem;">
+        <button class="btn secondary-btn small-btn edit-category-btn" data-id="${category.id}">Edit</button>
+        <button class="btn secondary-btn small-btn delete-category-btn" data-id="${category.id}" style="background: var(--danger-100); color: var(--danger-600); border: none;">Delete</button>
+      </div>
+    </div>
+  `).join('');
+  
+  // Add listeners
+  document.querySelectorAll('.edit-category-btn').forEach(btn => {
+    btn.addEventListener('click', () => editCategory(btn.dataset.id));
+  });
+  document.querySelectorAll('.delete-category-btn').forEach(btn => {
+    btn.addEventListener('click', () => deleteCategory(btn.dataset.id));
+  });
+}
+
+function renderProjectsList() {
+  const projectsList = document.getElementById('projectsList');
+  if (!projectsList) return;
+  
+  if (projectsCache.length === 0) {
+    projectsList.innerHTML = '<p style="color: var(--gray-500); text-align: center; padding: 2rem;">No projects yet. Create one to get started!</p>';
+    return;
+  }
+  
+  projectsList.innerHTML = projectsCache.map(project => `
+    <div class="user-card">
+      <div class="user-info">
+        <h4>${project.name}</h4>
+      </div>
+      <div style="display: flex; gap: 0.5rem;">
+        <button class="btn secondary-btn small-btn edit-project-btn" data-id="${project.id}">Edit</button>
+        <button class="btn secondary-btn small-btn delete-project-btn" data-id="${project.id}" style="background: var(--danger-100); color: var(--danger-600); border: none;">Delete</button>
+      </div>
+    </div>
+  `).join('');
+  
+  // Add listeners
+  document.querySelectorAll('.edit-project-btn').forEach(btn => {
+    btn.addEventListener('click', () => editProject(btn.dataset.id));
+  });
+  document.querySelectorAll('.delete-project-btn').forEach(btn => {
+    btn.addEventListener('click', () => deleteProject(btn.dataset.id));
+  });
+}
+
+function updateCounts() {
+  const totalCategoriesEl = document.getElementById('totalCategoriesCount');
+  const totalProjectsEl = document.getElementById('totalProjectsCount');
+  if (totalCategoriesEl) totalCategoriesEl.textContent = categoriesCache.length;
+  if (totalProjectsEl) totalProjectsEl.textContent = projectsCache.length;
+}
+
+function openCategoryModal(categoryId = null) {
+  const modal = document.getElementById('categoryModal');
+  const title = document.getElementById('categoryModalTitle');
+  const form = document.getElementById('categoryForm');
+  const idInput = document.getElementById('categoryId');
+  const nameInput = document.getElementById('categoryName');
+  
+  if (!modal) return;
+  
+  form.reset();
+  idInput.value = '';
+  
+  if (categoryId) {
+    const category = categoriesCache.find(c => c.id === categoryId);
+    if (category) {
+      title.textContent = 'Edit Project Category';
+      idInput.value = category.id;
+      nameInput.value = category.name;
+    }
+  } else {
+    title.textContent = 'Create New Category';
+  }
+  
+  modal.classList.remove('hidden');
+}
+
+function openProjectModal(projectId = null) {
+  const modal = document.getElementById('projectModal');
+  const title = document.getElementById('projectModalTitle');
+  const form = document.getElementById('projectForm');
+  const idInput = document.getElementById('projectId');
+  const nameInput = document.getElementById('projectName');
+  
+  if (!modal) return;
+  
+  form.reset();
+  idInput.value = '';
+  
+  if (projectId) {
+    const project = projectsCache.find(p => p.id === projectId);
+    if (project) {
+      title.textContent = 'Edit Project Name';
+      idInput.value = project.id;
+      nameInput.value = project.name;
+    }
+  } else {
+    title.textContent = 'Create New Project';
+  }
+  
+  modal.classList.remove('hidden');
+}
+
+async function handleSaveCategory(e) {
+  e.preventDefault();
+  const categoryId = document.getElementById('categoryId').value;
+  const name = document.getElementById('categoryName').value.trim();
+  
+  if (!name) {
+    alert('Please enter a category name');
+    return;
+  }
+  
+  // Check for case-insensitive duplicates
+  const normalizedName = name.toLowerCase();
+  const duplicate = categoriesCache.find(c => c.name.toLowerCase() === normalizedName && c.id !== categoryId);
+  if (duplicate) {
+    alert('A category with this name already exists');
+    return;
+  }
+  
+  try {
+    const now = new Date();
+    const date = now.toISOString().split('T')[0];
+    
+    if (categoryId) {
+      // Update
+      const oldCategory = categoriesCache.find(c => c.id === categoryId);
+      await db.collection('groups').doc(currentGroup).collection('categories').doc(categoryId).update({
+        name,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      
+      // If name changed, update tasks that use this category
+      if (oldCategory && oldCategory.name !== name) {
+        const tasksSnapshot = await db.collection('groups').doc(currentGroup).collection('tasks')
+          .where('categoryId', '==', categoryId).get();
+        
+        const batch = db.batch();
+        tasksSnapshot.docs.forEach(doc => {
+          batch.update(doc.ref, { categoryName: name });
+        });
+        await batch.commit();
+        
+        // Send notifications to assigned users
+        await notifyAffectedUsers('category', categoryId, oldCategory.name, name);
+      }
+      
+    } else {
+      // Create
+      await db.collection('groups').doc(currentGroup).collection('categories').add({
+        name,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+    
+    document.getElementById('categoryModal').classList.add('hidden');
+    alert('Category saved successfully');
+  } catch (error) {
+    console.error('Save category error:', error);
+    alert('Failed to save category: ' + error.message);
+  }
+}
+
+async function handleSaveProject(e) {
+  e.preventDefault();
+  const projectId = document.getElementById('projectId').value;
+  const name = document.getElementById('projectName').value.trim();
+  
+  if (!name) {
+    alert('Please enter a project name');
+    return;
+  }
+  
+  // Check for case-insensitive duplicates
+  const normalizedName = name.toLowerCase();
+  const duplicate = projectsCache.find(p => p.name.toLowerCase() === normalizedName && p.id !== projectId);
+  if (duplicate) {
+    alert('A project with this name already exists');
+    return;
+  }
+  
+  try {
+    const now = new Date();
+    const date = now.toISOString().split('T')[0];
+    
+    if (projectId) {
+      // Update
+      const oldProject = projectsCache.find(p => p.id === projectId);
+      await db.collection('groups').doc(currentGroup).collection('projects').doc(projectId).update({
+        name,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      
+      // If name changed, update tasks that use this project
+      if (oldProject && oldProject.name !== name) {
+        const tasksSnapshot = await db.collection('groups').doc(currentGroup).collection('tasks')
+          .where('projectId', '==', projectId).get();
+        
+        const batch = db.batch();
+        tasksSnapshot.docs.forEach(doc => {
+          batch.update(doc.ref, { projectName: name });
+        });
+        await batch.commit();
+        
+        // Send notifications to assigned users
+        await notifyAffectedUsers('project', projectId, oldProject.name, name);
+      }
+      
+    } else {
+      // Create
+      await db.collection('groups').doc(currentGroup).collection('projects').add({
+        name,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+    
+    document.getElementById('projectModal').classList.add('hidden');
+    alert('Project saved successfully');
+  } catch (error) {
+    console.error('Save project error:', error);
+    alert('Failed to save project: ' + error.message);
+  }
+}
+
+function editCategory(id) {
+  openCategoryModal(id);
+}
+
+async function deleteCategory(id) {
+  if (!confirm('Are you sure you want to delete this category? This will not delete any tasks.')) {
+    return;
+  }
+  
+  try {
+    const category = categoriesCache.find(c => c.id === id);
+    await db.collection('groups').doc(currentGroup).collection('categories').doc(id).delete();
+    
+    // Send notifications to assigned users
+    await notifyAffectedUsers('category', id, category?.name, null);
+    
+    alert('Category deleted successfully');
+  } catch (error) {
+    console.error('Delete category error:', error);
+    alert('Failed to delete category: ' + error.message);
+  }
+}
+
+function editProject(id) {
+  openProjectModal(id);
+}
+
+async function deleteProject(id) {
+  if (!confirm('Are you sure you want to delete this project? This will not delete any tasks.')) {
+    return;
+  }
+  
+  try {
+    const project = projectsCache.find(p => p.id === id);
+    await db.collection('groups').doc(currentGroup).collection('projects').doc(id).delete();
+    
+    // Send notifications to assigned users
+    await notifyAffectedUsers('project', id, project?.name, null);
+    
+    alert('Project deleted successfully');
+  } catch (error) {
+    console.error('Delete project error:', error);
+    alert('Failed to delete project: ' + error.message);
+  }
+}
+
+async function notifyAffectedUsers(type, id, oldName, newName) {
+  // Find tasks that use this category or project
+  const fieldName = type === 'category' ? 'categoryId' : 'projectId';
+  const tasksSnapshot = await db.collection('groups').doc(currentGroup).collection('tasks')
+    .where(fieldName, '==', id).get();
+  
+  if (tasksSnapshot.empty) return;
+  
+  // Collect unique users from affected tasks
+  const userEmails = new Set();
+  tasksSnapshot.docs.forEach(doc => {
+    const data = doc.data();
+    if (data.primaryUser) userEmails.add(data.primaryUser);
+    if (data.secondaryUser) userEmails.add(data.secondaryUser);
+  });
+  
+  // Create notification message
+  let message = '';
+  if (newName) {
+    message = `${type === 'category' ? 'Category' : 'Project'} "${oldName}" has been renamed to "${newName}"`;
+  } else {
+    message = `${type === 'category' ? 'Category' : 'Project'} "${oldName}" has been deleted`;
+  }
+  
+  // Send notifications to users
+  await Promise.all([...userEmails].map(email => {
+    return db.collection('groups').doc(currentGroup)
+      .collection('users').doc(email)
+      .collection('notifications').add({
+        type: type + '_updated',
+        message,
+        read: false,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+  }));
 }
 
 function openIssueModal() {
