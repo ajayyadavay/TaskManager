@@ -2549,7 +2549,7 @@ metricsContainer.innerHTML = `
       </div>
       <div>
         <h2>Dashboard Overview</h2>
-        <p>Real-time summary of your data</p>
+        <p>Punch List Summary Dashboard</p>
       </div>
     </div>
 
@@ -2583,20 +2583,6 @@ metricsContainer.innerHTML = `
         </div>
       </div>
 
-      <div class="metrics-card completed-card">
-        <div class="card-icon">
-          <i class="fas fa-check-double"></i>
-        </div>
-
-        <h3>Completed</h3>
-        <div class="metrics-number">${completed}</div>
-
-        <div class="card-footer">
-          <i class="fas fa-check-circle"></i>
-          <span>Successfully completed</span>
-        </div>
-      </div>
-
       <div class="metrics-card archived-card">
         <div class="card-icon">
           <i class="fas fa-archive"></i>
@@ -2608,6 +2594,20 @@ metricsContainer.innerHTML = `
         <div class="card-footer">
           <i class="fas fa-box"></i>
           <span>Archived items</span>
+        </div>
+      </div>
+
+      <div class="metrics-card completed-card">
+        <div class="card-icon">
+          <i class="fas fa-check-double"></i>
+        </div>
+
+        <h3>Completed</h3>
+        <div class="metrics-number">${completed}</div>
+
+        <div class="card-footer">
+          <i class="fas fa-check-circle"></i>
+          <span>Successfully completed</span>
         </div>
       </div>
 

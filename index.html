@@ -13,14 +13,59 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
 </head>
 <body>
   <div id="app">
-    <!-- Login Page -->
-    <div id="loginPage" class="page">
-      <div class="login-container">
-        <h1>Task Manager</h1>
-        <p class="subtitle">Collaborate and manage tasks with your team</p>
-        <button id="googleLoginBtn" class="btn primary-btn" style="width: 100%;">Login with Google</button>
-      </div>
+   <!-- Login Page -->
+<!-- Login Page -->
+<div id="loginPage" class="page">
+  <div id="loginContainer">
+
+    <div id="loginLogo">
+      <i class="fas fa-tasks"></i>
     </div>
+
+    <h1 id="loginTitle">Task Manager</h1>
+
+    <p id="loginSubtitle">
+      Transform project chaos into organized execution. Collaborate with teams,
+      assign tasks, manage punch lists, track issues, and monitor progress from a
+      single workspace. Deliver projects faster with complete visibility,
+      accountability, and control.
+    </p>
+
+    <div id="featureHighlights">
+
+      <div id="featureTeamCollaboration">
+        <i class="fas fa-users"></i>
+        <span>Team Collaboration</span>
+      </div>
+
+      <div id="featurePunchLists">
+        <i class="fas fa-list-check"></i>
+        <span>Punch Lists</span>
+      </div>
+
+      <div id="featureTaskManagement">
+        <i class="fas fa-tasks"></i>
+        <span>Task Management</span>
+      </div>
+
+      <div id="featureIssueTracking">
+        <i class="fas fa-triangle-exclamation"></i>
+        <span>Issue Tracking</span>
+      </div>
+
+    </div>
+
+    <button id="googleLoginBtn">
+      <i class="fab fa-google"></i>
+      Continue with Google
+    </button>
+
+    <p id="loginFooter">
+      Trusted workspace for project teams and organizations.
+    </p>
+
+  </div>
+</div>
 
     <!-- Group Selection Page -->
     <div id="groupSelectionPage" class="page hidden">

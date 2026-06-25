@@ -2153,3 +2153,182 @@ body {
         font-size:20px;
     }
 }
+
+/*Login page*/
+/* =========================
+   LOGIN PAGE
+========================= */
+
+#loginPage{
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:32px;
+    background:
+        radial-gradient(circle at top right, rgba(2,170,248,.15), transparent 35%),
+        radial-gradient(circle at bottom left, rgba(40,53,238,.12), transparent 35%),
+        linear-gradient(135deg,#f8fafc 0%,#ffffff 100%);
+}
+
+#loginContainer{
+    width:100%;
+    max-width:600px;
+    background:#ffffff;
+    padding:48px;
+    border-radius:28px;
+    text-align:center;
+    border:1px solid #eef2f7;
+    box-shadow:
+        0 24px 48px rgba(15,23,42,.08),
+        0 8px 16px rgba(15,23,42,.05);
+    position:relative;
+    overflow:hidden;
+}
+
+#loginContainer::before{
+    content:"";
+    position:absolute;
+    top:0;
+    left:0;
+    width:100%;
+    height:5px;
+    background:linear-gradient(
+        90deg,
+        #02aaf8,
+        #2835ee
+    );
+}
+
+#loginLogo{
+    width:84px;
+    height:84px;
+    margin:0 auto 24px;
+    border-radius:24px;
+    background:linear-gradient(
+        135deg,
+        #02aaf8,
+        #2835ee
+    );
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:#ffffff;
+    font-size:34px;
+    box-shadow:
+        0 16px 32px rgba(40,53,238,.25);
+}
+
+#loginTitle{
+    margin:0 0 14px;
+    font-size:2.5rem;
+    font-weight:800;
+    color:#0f172a;
+    letter-spacing:-0.03em;
+}
+
+#loginSubtitle{
+    max-width:500px;
+    margin:0 auto 32px;
+    color:#64748b;
+    font-size:1rem;
+    line-height:1.8;
+    text-align:justify; 
+    text-justify:inter-word;
+}
+
+#featureHighlights{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:14px;
+    margin-bottom:32px;
+}
+
+#featureTeamCollaboration,
+#featurePunchLists,
+#featureTaskManagement,
+#featureIssueTracking{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:14px 16px;
+    background:#f8fafc;
+    border:1px solid #e2e8f0;
+    border-radius:14px;
+    font-size:.95rem;
+    font-weight:600;
+    color:#475569;
+    transition:all .25s ease;
+}
+
+#featureTeamCollaboration:hover,
+#featurePunchLists:hover,
+#featureTaskManagement:hover,
+#featureIssueTracking:hover{
+    transform:translateY(-2px);
+    border-color:#bfdbfe;
+    box-shadow:
+        0 8px 16px rgba(2,170,248,.08);
+}
+
+#featureTeamCollaboration i,
+#featurePunchLists i,
+#featureTaskManagement i,
+#featureIssueTracking i{
+    color:#02aaf8;
+    font-size:1rem;
+}
+
+#googleLoginBtn{
+    width:100%;
+    padding:16px 20px;
+    border:none;
+    border-radius:16px;
+    background:linear-gradient(
+        135deg,
+        #02aaf8,
+        #2835ee
+    );
+    color:#ffffff;
+    font-size:1rem;
+    font-weight:700;
+    cursor:pointer;
+    transition:all .25s ease;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+}
+
+#googleLoginBtn:hover{
+    transform:translateY(-3px);
+    box-shadow:
+        0 16px 32px rgba(40,53,238,.25);
+}
+
+#googleLoginBtn i{
+    font-size:1.1rem;
+}
+
+#loginFooter{
+    margin-top:20px;
+    font-size:.85rem;
+    color:#94a3b8;
+}
+
+/* Mobile */
+
+@media (max-width:640px){
+
+    #loginContainer{
+        padding:32px 24px;
+    }
+
+    #loginTitle{
+        font-size:2rem;
+    }
+
+    #featureHighlights{
+        grid-template-columns:1fr;
+    }
+}
