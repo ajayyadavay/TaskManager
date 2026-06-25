@@ -144,6 +144,7 @@ function setupEventListeners() {
   document.getElementById('categoryForm')?.addEventListener('submit', handleSaveCategory);
   document.getElementById('projectForm')?.addEventListener('submit', handleSaveProject);
   document.getElementById('punchListForm')?.addEventListener('submit', handleSavePunchList);
+  document.getElementById('confirmTransferAdminBtn')?.addEventListener('click', confirmTransferAdmin);
 
   // User profile dropdown
   document.getElementById('userProfile').addEventListener('click', (e) => {
@@ -2039,7 +2040,16 @@ let trailHtml = `
       `;
     }
   }
-  
+
+  // Add "Create Punch List" button if task is open/in progress/on hold (available to all users)
+  if (['pending', 'accepted', 'work_in_progress', 'partially_completed'].includes(task.status)) {
+    actionsHtml = (actionsHtml || '') + `
+      <div style="margin-top: 1rem;">
+        <button class="btn primary-btn" style="width:100%;" onclick="openPunchListModal('${task.id}')">Create Punch List</button>
+      </div>
+    `;
+  }
+
   // Admin actions: close task, delete task
   if (isAdmin) {
     if (!isTaskFinished(task)) {
@@ -2074,14 +2084,6 @@ let trailHtml = `
         <button class="btn primary-btn" style="width:100%;" onclick="openCreateTaskFromTask('${task.id}')">Create New Task from this Task</button>
       </div>
     `;
-    // Add "Create Punch List" button if task is open/in progress/on hold
-    if (['pending', 'accepted', 'work_in_progress', 'partially_completed'].includes(task.status)) {
-      actionsHtml = (actionsHtml || '') + `
-        <div style="margin-top: 1rem;">
-          <button class="btn primary-btn" style="width:100%;" onclick="openPunchListModal('${task.id}')">Create Punch List</button>
-        </div>
-      `;
-    }
      
     // Admin reassignment (only if task is not rejected)
     if (/*task.status !== 'rejected' &&*/ !isTaskFinished(task)) {
@@ -2338,6 +2340,25 @@ function openPunchListModal(taskId = null) {
   document.getElementById('punchListFromTaskId').value = taskId || '';
   currentPunchListItems = [];
   renderPunchListItemsInForm();
+
+  // Auto-fill name and description if taskId is provided
+  if (taskId) {
+    const task = tasksCache.find(t => t.id === taskId);
+    if (task) {
+      // Auto-fill punchlist description with task description
+      if (task.description) {
+        document.getElementById('punchListDescription').value = task.description;
+      }
+      // Auto-fill punchlist name with task's project name
+      if (task.project) {
+        const project = projectsCache.find(p => p.id === task.project);
+        if (project) {
+          document.getElementById('punchListName').value = project.name;
+        }
+      }
+    }
+  }
+
   document.getElementById('punchListModal').classList.remove('hidden');
 }
 
@@ -2484,17 +2505,147 @@ function getTimeAgo(timestamp) {
 }
 
 function renderPunchLists() {
+  // Filter for visible punch lists first
+  const visiblePunchLists = punchListsCache.filter(pl => 
+    pl.visibility === 'public' || pl.createdBy === currentUser.email
+  );
+  
   const metricsContainer = document.getElementById('punchListsMetricsGrid');
   if (metricsContainer) {
-    const total = punchListsCache.length;
-    const active = punchListsCache.filter(pl => pl.status === 'active').length;
-    const completed = punchListsCache.filter(pl => {
+    const total = visiblePunchLists.length;
+    const active = visiblePunchLists.filter(pl => pl.status === 'active').length;
+    const completed = visiblePunchLists.filter(pl => {
       const progress = calculatePunchListProgress(pl);
       return progress === 100;
     }).length;
-    const archived = punchListsCache.filter(pl => pl.status === 'archived').length;
-    
-    metricsContainer.innerHTML = `
+    const archived = visiblePunchLists.filter(pl => pl.status === 'archived').length;
+
+
+  const completionPercent =
+  total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  let progressringcolor;
+
+if (completionPercent < 25) {
+  progressringcolor = '#ef4444'; // red
+} else if (completionPercent < 50) {
+  progressringcolor = '#f97316'; // orange
+} else if (completionPercent < 75) {
+  progressringcolor = '#eab308'; // yellow
+} else if (completionPercent < 100) {
+  progressringcolor = '#22c55e'; // green
+} else {
+  progressringcolor = '#16a34a'; // dark green 
+}
+
+metricsContainer.innerHTML = `
+<div class="dashboard-overview">
+
+  <div class="metrics-left">
+
+    <div class="metrics-header">
+      <div class="metrics-header-icon">
+        <i class="fas fa-tachometer-alt"></i>
+      </div>
+      <div>
+        <h2>Dashboard Overview</h2>
+        <p>Real-time summary of your data</p>
+      </div>
+    </div>
+
+    <div class="metrics-grid">
+
+      <div class="metrics-card total-card">
+        <div class="card-icon">
+          <i class="fas fa-clipboard-list"></i>
+        </div>
+
+        <h3>Total</h3>
+        <div class="metrics-number">${total}</div>
+
+        <div class="card-footer">
+          <i class="fas fa-user-friends"></i>
+          <span>All items in the system</span>
+        </div>
+      </div>
+
+      <div class="metrics-card active-card">
+        <div class="card-icon">
+          <i class="fas fa-heartbeat"></i>
+        </div>
+
+        <h3>Active</h3>
+        <div class="metrics-number">${active}</div>
+
+        <div class="card-footer">
+          <i class="fas fa-play"></i>
+          <span>Currently active items</span>
+        </div>
+      </div>
+
+      <div class="metrics-card completed-card">
+        <div class="card-icon">
+          <i class="fas fa-check-double"></i>
+        </div>
+
+        <h3>Completed</h3>
+        <div class="metrics-number">${completed}</div>
+
+        <div class="card-footer">
+          <i class="fas fa-check-circle"></i>
+          <span>Successfully completed</span>
+        </div>
+      </div>
+
+      <div class="metrics-card archived-card">
+        <div class="card-icon">
+          <i class="fas fa-archive"></i>
+        </div>
+
+        <h3>Archived</h3>
+        <div class="metrics-number">${archived}</div>
+
+        <div class="card-footer">
+          <i class="fas fa-box"></i>
+          <span>Archived items</span>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <div class="completion-card">
+
+    <div class="completion-header">
+      <h2>Completion Overview</h2>
+      <p>Percentage of tasks completed</p>
+    </div>
+
+    <div class="progress-ring"
+     style="
+       --progress:${completionPercent};
+       --progress-color:${progressringcolor};
+     ">
+
+      <div class="progress-center">
+        <div class="progress-value">${completionPercent}%</div>
+        <div class="progress-label">Completed</div>
+        <div class="progress-count">${completed} of ${total} tasks</div>
+      </div>
+    </div>
+
+   <div class="completion-footer"
+     style="color:${progressringcolor};">
+  <i class="fas fa-arrow-trend-up"></i>
+  <span>${completionPercent}% completion rate</span>
+</div>
+
+  </div>
+
+</div>
+`;
+    /*metricsContainer.innerHTML = `
       <div class="metrics-card">
         <h3>Total</h3>
         <p class="metrics-number">${total}</p>
@@ -2511,13 +2662,8 @@ function renderPunchLists() {
         <h3>Archived</h3>
         <p class="metrics-number">${archived}</p>
       </div>
-    `;
+    `;*/
   }
-  
-  // Filter for visible punch lists
-  const visiblePunchLists = punchListsCache.filter(pl => 
-    pl.visibility === 'public' || pl.createdBy === currentUser.email
-  );
   
   const activePunchLists = visiblePunchLists.filter(pl => pl.status === 'active');
   const archivedPunchLists = visiblePunchLists.filter(pl => pl.status === 'archived');
@@ -2563,6 +2709,82 @@ function renderPunchLists() {
             ` : ''}
           </div>
         `;
+
+
+/*
+        return `
+<div class="user-card punchlist-card"
+     onclick="openViewPunchListModal('${pl.id}')">
+
+  <div class="punchlist-header">
+
+    <div>
+      <div class="punchlist-id">${pl.punchListId}</div>
+      <div class="punchlist-title">${pl.name}</div>
+    </div>
+
+    <div class="punchlist-visibility ${pl.visibility}">
+      ${pl.visibility}
+    </div>
+
+  </div>
+
+  <div class="punchlist-progress">
+
+    <div class="punchlist-progress-header">
+      <span>Progress</span>
+      <span>${progress}%</span>
+    </div>
+
+    <div class="punchlist-progress-bar">
+      <div class="punchlist-progress-fill"
+           style="width:${progress}%">
+      </div>
+    </div>
+
+  </div>
+
+  <div class="punchlist-meta">
+
+    <div class="punchlist-meta-row">
+      <span>Created By</span>
+      <strong>${createdByName}</strong>
+    </div>
+
+    <div class="punchlist-meta-row">
+      <span>Last Updated</span>
+      <strong>${getTimeAgo(pl.lastUpdatedAt)}</strong>
+    </div>
+
+  </div>
+
+  ${
+    pl.createdBy === currentUser.email
+      ? `
+      <div class="punchlist-actions">
+        <button class="btn secondary-btn small-btn"
+                onclick="event.stopPropagation(); openEditPunchListModal('${pl.id}')">
+          Edit
+        </button>
+
+        <button class="btn secondary-btn small-btn"
+                onclick="event.stopPropagation(); archivePunchList('${pl.id}')">
+          Archive
+        </button>
+
+        <button class="btn secondary-btn small-btn"
+                style="background:var(--danger-100);color:var(--danger-600);"
+                onclick="event.stopPropagation(); deletePunchList('${pl.id}')">
+          Delete
+        </button>
+      </div>
+      `
+      : ''
+  }
+
+</div>
+`;*/
+
       }).join('');
     }
   }
@@ -2885,7 +3107,7 @@ async function handleInviteUser(e) {
 function loadUsersList() {
   // Filter admins and non-admins
   const admins = usersCache.filter(u => u.isAdmin);
-  const teamMembers = usersCache.filter(u => !u.isAdmin);
+  const teamMembers = usersCache.filter(u => !u.isAdmin && u.status !== 'inactive' && u.status !== 'suspended'); // Eligible users
   
   // Render admins
   document.getElementById('adminsList').innerHTML = admins.map(user => `
@@ -2906,7 +3128,8 @@ function loadUsersList() {
         <p>${user.email}</p>
         <p>${user.position}</p>
       </div>
-      <div>
+      <div style="display: flex; gap: 0.5rem;">
+        <button class="btn secondary-btn small-btn transfer-admin-btn" data-email="${user.email}">Transfer Admin Role</button>
         <button class="btn secondary-btn small-btn remove-user-btn" data-email="${user.email}">Remove</button>
       </div>
     </div>
@@ -2915,6 +3138,11 @@ function loadUsersList() {
   // Add remove button listeners
   document.querySelectorAll('.remove-user-btn').forEach(btn => {
     btn.addEventListener('click', () => removeUser(btn.dataset.email));
+  });
+  
+  // Add transfer admin button listeners
+  document.querySelectorAll('.transfer-admin-btn').forEach(btn => {
+    btn.addEventListener('click', () => openTransferAdminModal(btn.dataset.email));
   });
 }
 
@@ -2927,6 +3155,140 @@ async function removeUser(email) {
   } catch (error) {
     console.error('Remove user error:', error);
     alert('Failed to remove user: ' + error.message);
+  }
+}
+
+function openTransferAdminModal(selectedEmail) {
+  // Populate the select with eligible users
+  const eligibleUsers = usersCache.filter(u => !u.isAdmin && u.status !== 'inactive' && u.status !== 'suspended');
+  const selectEl = document.getElementById('transferAdminUser');
+  selectEl.innerHTML = '<option value="">Select a user</option>' + 
+    eligibleUsers.map(u => `<option value="${u.email}" ${u.email === selectedEmail ? 'selected' : ''}>${u.name} (${u.email})</option>`).join('');
+  
+  document.getElementById('transferAdminModal').classList.remove('hidden');
+}
+
+async function confirmTransferAdmin() {
+  const newAdminEmail = document.getElementById('transferAdminUser').value;
+  if (!newAdminEmail) {
+    alert('Please select a user');
+    return;
+  }
+  
+  const newAdminUser = usersCache.find(u => u.email === newAdminEmail);
+  if (!confirm(`Are you sure you want to transfer Admin privileges to ${newAdminUser.name}? This action will swap roles and transfer all active responsibilities between both users.`)) {
+    return;
+  }
+  
+  try {
+    const batch = db.batch();
+    const now = new Date();
+    const date = now.toISOString().split('T')[0];
+    const time = now.toTimeString().split(' ')[0].substring(0, 5);
+    
+    // Update current user's role to member
+    batch.update(db.collection('groups').doc(currentGroup).collection('users').doc(currentUser.email), {
+      isAdmin: false
+    });
+    
+    // Update new admin's role to admin
+    batch.update(db.collection('groups').doc(currentGroup).collection('users').doc(newAdminEmail), {
+      isAdmin: true
+    });
+    
+    // Reassign active tasks: swap primary and secondary users between current admin and new admin
+    // Active tasks are those NOT in closed, completed, rejected
+    tasksCache.forEach(task => {
+      if (['closed', 'completed', 'rejected'].includes(task.status)) return;
+      
+      const taskRef = db.collection('groups').doc(currentGroup).collection('tasks').doc(task.id);
+      let updates = {
+        lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        lastUpdatedBy: currentUser.email
+      };
+      
+      // Check if primary is current admin → swap with new admin
+      if (task.primary === currentUser.email) {
+        updates.primary = newAdminEmail;
+      } else if (task.primary === newAdminEmail) {
+        updates.primary = currentUser.email;
+      }
+      
+      // Check if secondary is current admin → swap with new admin
+      if (task.secondary === currentUser.email) {
+        updates.secondary = newAdminEmail;
+      } else if (task.secondary === newAdminEmail) {
+        updates.secondary = currentUser.email;
+      }
+      
+      // Add to trail
+      updates.trail = firebase.firestore.FieldValue.arrayUnion({
+        action: 'Admin Role Transfer',
+        user: currentUser.email,
+        date: date,
+        time: time,
+        details: `Responsibilities transferred between ${currentUserData.name} and ${newAdminUser.name}`
+      });
+      
+      batch.update(taskRef, updates);
+    });
+    
+    // Add audit log entry (we'll use the group's audit trail or create an audit log)
+    // For now, let's add to the group document
+    batch.update(db.collection('groups').doc(currentGroup), {
+      auditTrail: firebase.firestore.FieldValue.arrayUnion({
+        action: 'Admin Role Transfer',
+        oldAdmin: currentUserData.name,
+        oldAdminEmail: currentUser.email,
+        newAdmin: newAdminUser.name,
+        newAdminEmail: newAdminEmail,
+        date: date,
+        time: time
+      })
+    });
+    
+    await batch.commit();
+    
+    // Create notifications
+    // New admin notification
+    await db.collection('groups').doc(currentGroup).collection('users').doc(newAdminEmail).collection('notifications').add({
+      type: 'admin_role_transfer',
+      message: 'You are now the Group Admin.',
+      read: false,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    
+    // Former admin notification
+    await db.collection('groups').doc(currentGroup).collection('users').doc(currentUser.email).collection('notifications').add({
+      type: 'admin_role_transfer',
+      message: 'You are now a Group Member.',
+      read: false,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    
+    // Notify all group members
+    for (const user of usersCache) {
+      if (user.email !== currentUser.email && user.email !== newAdminEmail) {
+        await db.collection('groups').doc(currentGroup).collection('users').doc(user.email).collection('notifications').add({
+          type: 'admin_role_transfer',
+          message: `Admin role has been transferred from ${currentUserData.name} to ${newAdminUser.name}.`,
+          read: false,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      }
+    }
+    
+    // Close modal
+    document.getElementById('transferAdminModal').classList.add('hidden');
+    
+    alert('Admin role successfully transferred. Roles and active responsibilities have been interchanged. You will be logged out.');
+    
+    // Auto logout
+    handleLogout();
+    
+  } catch (error) {
+    console.error('Transfer admin error:', error);
+    alert('Failed to transfer admin role: ' + error.message);
   }
 }
 

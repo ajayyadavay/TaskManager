@@ -317,13 +317,13 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
 
           <!-- Punch Lists Section -->
           <section id="punchListsSection" class="section hidden">
+             <!-- Stats Cards -->
+            <div id="punchListsMetricsGrid" class="pl-metrics-grid" style="margin-bottom: 1.5rem;"></div>
+            
             <div class="section-header">
               <h2>Punch Lists</h2>
               <button id="createPunchListBtn" class="btn primary-btn">+ New Punch List</button>
             </div>
-            
-            <!-- Stats Cards -->
-            <div id="punchListsMetricsGrid" class="metrics-grid" style="margin-bottom: 1.5rem;"></div>
             
             <!-- View Toggle -->
             <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem; gap: 0.5rem;">
@@ -359,6 +359,7 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
               <h3 style="margin-bottom: 1rem; color: var(--gray-600);">Archived Punch Lists</h3>
               <div id="archivedPunchListsList" class="users-grid"></div>
             </div>
+          
           </section>
           
           <!-- Projects Section (Admin Only) -->
@@ -584,6 +585,21 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
     <div class="modal-content large-modal">
       <span class="close-btn">&times;</span>
       <div id="viewPunchListContent"></div>
+    </div>
+  </div>
+
+  <!-- Transfer Admin Role Modal -->
+  <div id="transferAdminModal" class="modal hidden">
+    <div class="modal-content">
+      <span class="close-btn">&times;</span>
+      <h3>Transfer Admin Role</h3>
+      <div class="input-group">
+        <label for="transferAdminUser">Select New Admin</label>
+        <select id="transferAdminUser" required>
+          <option value="">Select a user</option>
+        </select>
+      </div>
+      <button id="confirmTransferAdminBtn" class="btn primary-btn" style="width: 100%;">Confirm Transfer</button>
     </div>
   </div>
 
