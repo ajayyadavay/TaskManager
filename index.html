@@ -136,6 +136,7 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
             <span id="notificationBadge" class="notification-badge hidden">0</span>
           </button>
           <button class="nav-item" data-section="punchLists">Punch Lists</button>
+          <button class="nav-item" data-section="notes">Notes</button>
           <button id="adminNavUsers" class="nav-item hidden" data-section="users">Users</button>
           <button id="adminNavProject" class="nav-item hidden" data-section="projects">Project</button>
         </aside>
@@ -407,6 +408,28 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
           
           </section>
           
+          <!-- Notes Section -->
+          <section id="notesSection" class="section hidden">
+            <div class="section-header">
+              <h2>Notes</h2>
+              <button id="createNoteBtn" class="btn primary-btn">+ New Note</button>
+            </div>
+            <div class="search-filter-bar">
+              <div class="filter-row">
+                <input type="text" class="search-input" id="noteSearch" placeholder="Search notes by name, description...">
+                <select id="noteVisibilityFilter">
+                  <option value="">All Visibility</option>
+                  <option value="public">Public</option>
+                  <option value="private">Private</option>
+                </select>
+                <select id="noteCreatedByFilter">
+                  <option value="">All Creators</option>
+                </select>
+              </div>
+            </div>
+            <div id="notesList" class="users-grid"></div>
+          </section>
+          
           <!-- Projects Section (Admin Only) -->
           <section id="projectsSection" class="section hidden">
             <div class="section-header">
@@ -647,7 +670,73 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
       <button id="confirmTransferAdminBtn" class="btn primary-btn" style="width: 100%;">Confirm Transfer</button>
     </div>
   </div>
-
+  
+  <!-- Create/Edit Note Modal -->
+  <div id="noteModal" class="modal hidden">
+    <div class="modal-content extra-large-modal">
+      <span class="close-btn">&times;</span>
+      <h3 id="noteModalTitle">Create New Note</h3>
+      <form id="noteForm">
+        <input type="hidden" id="noteId">
+        <div class="input-group">
+          <label for="noteName">Note Name</label>
+          <input type="text" id="noteName" required placeholder="Enter note name">
+        </div>
+        <div class="input-group">
+          <label for="noteVisibility">Visibility</label>
+          <select id="noteVisibility">
+            <option value="private">Private (Default)</option>
+            <option value="public">Public</option>
+          </select>
+        </div>
+        <!-- Text Editor Toolbar -->
+        <div class="editor-toolbar">
+          <button type="button" class="editor-btn" data-command="bold" title="Bold"><i class="fas fa-bold"></i></button>
+          <button type="button" class="editor-btn" data-command="italic" title="Italic"><i class="fas fa-italic"></i></button>
+          <button type="button" class="editor-btn" data-command="underline" title="Underline"><i class="fas fa-underline"></i></button>
+          <button type="button" class="editor-btn" data-command="strikeThrough" title="Strikethrough"><i class="fas fa-strikethrough"></i></button>
+          <button type="button" class="editor-btn" data-command="insertUnorderedList" title="Unordered List"><i class="fas fa-list-ul"></i></button>
+          <button type="button" class="editor-btn" data-command="insertOrderedList" title="Ordered List"><i class="fas fa-list-ol"></i></button>
+          <button type="button" class="editor-btn" data-command="justifyLeft" title="Align Left"><i class="fas fa-align-left"></i></button>
+          <button type="button" class="editor-btn" data-command="justifyCenter" title="Align Center"><i class="fas fa-align-center"></i></button>
+          <button type="button" class="editor-btn" data-command="justifyRight" title="Align Right"><i class="fas fa-align-right"></i></button>
+          <input type="color" id="editorTextColor" class="color-picker" title="Text Color">
+          <input type="color" id="editorBgColor" class="color-picker" title="Background Color">
+          <select id="editorFontFamily" class="editor-select">
+            <option value="Arial">Arial</option>
+            <option value="Times New Roman">Times New Roman</option>
+            <option value="Courier New">Courier New</option>
+            <option value="Georgia">Georgia</option>
+            <option value="Verdana">Verdana</option>
+          </select>
+          <select id="editorFontSize" class="editor-select">
+            <option value="1">Small</option>
+            <option value="3" selected>Normal</option>
+            <option value="5">Large</option>
+            <option value="7">Extra Large</option>
+          </select>
+          <button type="button" class="editor-btn" data-command="removeFormat" title="Clear Formatting"><i class="fas fa-eraser"></i></button>
+        </div>
+        <div class="input-group">
+          <label for="noteDescription">Description</label>
+          <div id="noteDescription" contenteditable="true" class="editor-content" placeholder="Enter note description..."></div>
+        </div>
+        <div style="display: flex; gap: 1rem;">
+          <button type="button" id="exportNoteToPdfBtn" class="btn secondary-btn" style="flex: 1;">Export to PDF</button>
+          <button type="submit" class="btn primary-btn" style="flex: 2;">Save Note</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  
+  <!-- View Note Modal -->
+  <div id="viewNoteModal" class="modal hidden">
+    <div class="modal-content extra-large-modal">
+      <span class="close-btn">&times;</span>
+      <div id="viewNoteContent"></div>
+    </div>
+  </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -26,6 +26,7 @@ let issuesCache = [];
 let categoriesCache = [];
 let projectsCache = [];
 let punchListsCache = [];
+let notesCache = [];
 let deadlineOperator = '=';
 
 const FINISHED_TASK_STATUSES = new Set(['completed', 'closed', 'rejected']);
@@ -86,6 +87,40 @@ function setupEventListeners() {
     document.getElementById('punchListListView').classList.remove('hidden');
   });
   
+  // Notes buttons
+  document.getElementById('createNoteBtn')?.addEventListener('click', () => openNoteModal());
+  document.getElementById('exportNoteToPdfBtn')?.addEventListener('click', exportNoteToPdf);
+  
+  // Editor toolbar
+  document.querySelectorAll('.editor-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const command = btn.dataset.command;
+      document.execCommand(command, false, null);
+      document.getElementById('noteDescription').focus();
+    });
+  });
+  
+  document.getElementById('editorTextColor')?.addEventListener('input', (e) => {
+    document.execCommand('foreColor', false, e.target.value);
+    document.getElementById('noteDescription').focus();
+  });
+  
+  document.getElementById('editorBgColor')?.addEventListener('input', (e) => {
+    document.execCommand('hiliteColor', false, e.target.value);
+    document.getElementById('noteDescription').focus();
+  });
+  
+  document.getElementById('editorFontFamily')?.addEventListener('change', (e) => {
+    document.execCommand('fontName', false, e.target.value);
+    document.getElementById('noteDescription').focus();
+  });
+  
+  document.getElementById('editorFontSize')?.addEventListener('change', (e) => {
+    document.execCommand('fontSize', false, e.target.value);
+    document.getElementById('noteDescription').focus();
+  });
+  
   // Nav items
   document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', (e) => {
@@ -144,6 +179,7 @@ function setupEventListeners() {
   document.getElementById('categoryForm')?.addEventListener('submit', handleSaveCategory);
   document.getElementById('projectForm')?.addEventListener('submit', handleSaveProject);
   document.getElementById('punchListForm')?.addEventListener('submit', handleSavePunchList);
+  document.getElementById('noteForm')?.addEventListener('submit', handleSaveNote);
   document.getElementById('confirmTransferAdminBtn')?.addEventListener('click', confirmTransferAdmin);
 
   // User profile dropdown
@@ -174,6 +210,15 @@ function setupEventListeners() {
         loadIssues();
         updateActiveIssueFilters();
       });
+    }
+  });
+  
+  // Notes search and filter events
+  ['noteSearch', 'noteVisibilityFilter', 'noteCreatedByFilter'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('input', loadNotes);
+      el.addEventListener('change', loadNotes);
     }
   });
   
@@ -645,6 +690,9 @@ function checkAuthState() {
 async function handleGoogleLogin() {
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({
+      prompt: 'select_account' // Always show account picker
+    });
     const result = await auth.signInWithPopup(provider);
     currentUser = result.user;
     await loadUserGroups();
@@ -943,6 +991,15 @@ function setupRealtimeListeners() {
     .onSnapshot(snapshot => {
       punchListsCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       renderPunchLists();
+    });
+  
+  // Listen for notes changes
+  db.collection('groups').doc(currentGroup).collection('notes')
+    .orderBy('createdAt', 'desc')
+    .onSnapshot(snapshot => {
+      notesCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      loadNotes();
+      populateNoteCreatedByFilter();
     });
   
   // Listen for notifications for the current user
@@ -1273,9 +1330,14 @@ function showSection(section) {
   document.getElementById(section + 'Section').classList.remove('hidden');
 }
 
-function handleLogout() {
-  auth.signOut();
+async function handleLogout() {
+  try {
+    await auth.signOut();
+  } catch (error) {
+    console.error('Logout error:', error);
+  }
   localStorage.removeItem('currentGroup');
+  allUserGroupsCache = []; // Clear group cache on logout
   currentUser = null;
   currentGroup = null;
   currentGroupData = null;
@@ -1283,6 +1345,10 @@ function handleLogout() {
   currentUserData = null;
   tasksCache = [];
   issuesCache = [];
+  categoriesCache = [];
+  projectsCache = [];
+  punchListsCache = [];
+  notesCache = [];
   showLogin();
 }
 
@@ -2981,6 +3047,266 @@ window.deletePunchList = async function(punchListId) {
   
   await db.collection('groups').doc(currentGroup).collection('punchLists').doc(punchListId).delete();
   alert('Punch list deleted successfully!');
+}
+
+// ===============================
+// Notes Functions
+// ===============================
+
+window.openNoteModal = function(noteId = null) {
+  if (noteId) {
+    const note = notesCache.find(n => n.id === noteId);
+    if (!note) return;
+    document.getElementById('noteModalTitle').textContent = 'Edit Note';
+    document.getElementById('noteId').value = noteId;
+    document.getElementById('noteName').value = note.name;
+    document.getElementById('noteVisibility').value = note.visibility || 'private';
+    document.getElementById('noteDescription').innerHTML = note.description || '';
+  } else {
+    document.getElementById('noteModalTitle').textContent = 'Create New Note';
+    document.getElementById('noteForm').reset();
+    document.getElementById('noteId').value = '';
+    document.getElementById('noteDescription').innerHTML = '';
+  }
+  document.getElementById('noteModal').classList.remove('hidden');
+}
+
+async function handleSaveNote(e) {
+  e.preventDefault();
+  
+  const name = document.getElementById('noteName').value.trim();
+  const visibility = document.getElementById('noteVisibility').value;
+  const description = document.getElementById('noteDescription').innerHTML;
+  const noteId = document.getElementById('noteId').value;
+  
+  if (!name) {
+    alert('Please enter a note name');
+    return;
+  }
+  
+  const now = new Date();
+  const date = now.toISOString().split('T')[0];
+  const time = now.toTimeString().split(' ')[0].substring(0, 5);
+  
+  try {
+    if (noteId) {
+      // Update existing note
+      await db.collection('groups').doc(currentGroup).collection('notes').doc(noteId).update({
+        name,
+        visibility,
+        description,
+        lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        lastUpdatedDate: date,
+        lastUpdatedTime: time
+      });
+    } else {
+      // Create new note
+      // Generate note ID: NOTE-XXXXXX (using all notes in group for increment, not just visible)
+      let nextNumber = 1;
+      const maxNote = notesCache.reduce((max, note) => {
+        if (note.noteId && note.noteId.startsWith('NOTE-')) {
+          const num = parseInt(note.noteId.slice(5), 10);
+          return num > max ? num : max;
+        }
+        return max;
+      }, 0);
+      nextNumber = maxNote + 1;
+      const newNoteId = 'NOTE-' + String(nextNumber).padStart(6, '0');
+      
+      await db.collection('groups').doc(currentGroup).collection('notes').add({
+        noteId: newNoteId,
+        name,
+        visibility,
+        description,
+        createdBy: currentUser.email,
+        createdDate: date,
+        createdTime: time,
+        lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        lastUpdatedDate: date,
+        lastUpdatedTime: time,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+    
+    document.getElementById('noteModal').classList.add('hidden');
+    alert('Note saved successfully!');
+  } catch (error) {
+    console.error('Save note error:', error);
+    alert('Failed to save note: ' + error.message);
+  }
+}
+
+function exportNoteToPdf() {
+  const noteName = document.getElementById('noteName').value || 'note';
+  const content = document.getElementById('noteDescription');
+  if (!content.innerHTML.trim()) {
+    alert('Cannot export an empty note!');
+    return;
+  }
+  
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  const filename = `${noteName}_${year}${month}${day}${hours}${minutes}${seconds}.pdf`;
+  
+  const element = document.createElement('div');
+  element.style.padding = '2rem';
+  element.innerHTML = `
+    <h1 style="font-family: Arial, sans-serif; color: #1e293b; margin-bottom: 1rem;">${noteName}</h1>
+    <div style="font-family: Arial, sans-serif;">
+      ${content.innerHTML}
+    </div>
+  `;
+  
+  const opt = {
+    margin: 0.5,
+    filename: filename,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+  };
+  
+  html2pdf().set(opt).from(element).save(filename);
+}
+
+function loadNotes() {
+  // Filter visible notes first
+  const visibleNotes = notesCache.filter(note => 
+    note.visibility === 'public' || note.createdBy === currentUser.email
+  );
+  
+  // Apply search and filters
+  let filtered = [...visibleNotes];
+  const search = document.getElementById('noteSearch')?.value?.toLowerCase() || '';
+  if (search) {
+    filtered = filtered.filter(note => 
+      note.name.toLowerCase().includes(search) || 
+      (note.description && note.description.toLowerCase().includes(search))
+    );
+  }
+  
+  const visibilityFilter = document.getElementById('noteVisibilityFilter')?.value || '';
+  if (visibilityFilter) {
+    filtered = filtered.filter(note => note.visibility === visibilityFilter);
+  }
+  
+  const createdByFilter = document.getElementById('noteCreatedByFilter')?.value || '';
+  if (createdByFilter) {
+    filtered = filtered.filter(note => note.createdBy === createdByFilter);
+  }
+  
+  renderNotes(filtered);
+}
+
+function renderNotes(notes) {
+  const container = document.getElementById('notesList');
+  if (!container) return;
+  
+  if (notes.length === 0) {
+    container.innerHTML = '<p style="color: var(--gray-500); text-align: center; padding: 2rem;">No notes found</p>';
+    return;
+  }
+  
+  container.innerHTML = notes.map(note => {
+    const createdByName = usersCache.find(u => u.email === note.createdBy)?.name || note.createdBy;
+    const isOwner = note.createdBy === currentUser.email;
+    
+    // Strip HTML for preview
+    let previewText = '';
+    if (note.description) {
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = note.description;
+      previewText = tempDiv.textContent || tempDiv.innerText || '';
+      if (previewText.length > 150) {
+        previewText = previewText.substring(0, 150) + '...';
+      }
+    }
+    
+    return `
+      <div class="note-card" onclick="openViewNoteModal('${note.id}')">
+        <div class="note-card-header">
+          <h3 class="note-card-title">${note.name}</h3>
+          <span class="note-card-visibility ${note.visibility}">${note.visibility}</span>
+        </div>
+        <div class="note-card-description">${previewText}</div>
+        <div class="note-card-footer">
+          <div class="note-card-meta">
+            <div>Created by: ${createdByName}</div>
+            <div>Created: ${note.createdDate} ${note.createdTime}</div>
+          </div>
+          ${isOwner ? `
+            <div class="note-card-actions">
+              <button class="btn secondary-btn small-btn" onclick="event.stopPropagation(); openNoteModal('${note.id}')">Edit</button>
+              <button class="btn secondary-btn small-btn" style="background: var(--danger-100); color: var(--danger-600);" onclick="event.stopPropagation(); deleteNote('${note.id}')">Delete</button>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+window.openViewNoteModal = function(noteId) {
+  const note = notesCache.find(n => n.id === noteId);
+  if (!note) return;
+  
+  const createdByName = usersCache.find(u => u.email === note.createdBy)?.name || note.createdBy;
+  const content = document.getElementById('viewNoteContent');
+  if (!content) return;
+  
+  content.innerHTML = `
+    <div style="margin-bottom: 1.5rem;">
+      <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+        <h2 style="color: #1e293b; margin: 0;">${note.name}</h2>
+        <span class="note-card-visibility ${note.visibility}" style="margin: 0;">${note.visibility}</span>
+      </div>
+      <p style="color: #64748b; font-size: 0.875rem;">
+        Created by: <strong>${createdByName}</strong> on ${note.createdDate} ${note.createdTime}
+      </p>
+    </div>
+    <div style="border-top: 1px solid var(--gray-200); padding-top: 1rem;">
+      ${note.description || '<p style="color: #9ca3af;">No description</p>'}
+    </div>
+    ${note.createdBy === currentUser.email ? `
+      <div style="margin-top: 1.5rem; display: flex; gap: 0.5rem;">
+        <button class="btn secondary-btn" onclick="openNoteModal('${note.id}'); document.getElementById('viewNoteModal').classList.add('hidden');">Edit</button>
+        <button class="btn secondary-btn" style="background: var(--danger-100); color: var(--danger-600);" onclick="deleteNote('${note.id}'); document.getElementById('viewNoteModal').classList.add('hidden');">Delete</button>
+      </div>
+    ` : ''}
+  `;
+  
+  document.getElementById('viewNoteModal').classList.remove('hidden');
+}
+
+window.deleteNote = async function(noteId) {
+  if (!confirm('Are you sure you want to delete this note? This cannot be undone!')) return;
+  
+  await db.collection('groups').doc(currentGroup).collection('notes').doc(noteId).delete();
+  alert('Note deleted successfully!');
+}
+
+function populateNoteCreatedByFilter() {
+  const filter = document.getElementById('noteCreatedByFilter');
+  if (!filter) return;
+  
+  const currentValue = filter.value;
+  
+  // Get all unique creators from visible notes
+  const visibleNotes = notesCache.filter(note => 
+    note.visibility === 'public' || note.createdBy === currentUser.email
+  );
+  const creators = [...new Set(visibleNotes.map(note => note.createdBy))];
+  
+  filter.innerHTML = `<option value="">All Creators</option>` +
+    creators.map(email => {
+      const user = usersCache.find(u => u.email === email);
+      const name = user?.name || email;
+      return `<option value="${email}" ${email === currentValue ? 'selected' : ''}>${name}</option>`;
+    }).join('');
 }
 
 
