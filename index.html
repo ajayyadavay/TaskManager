@@ -194,7 +194,12 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
           <section id="tasksSection" class="section hidden">
             <div class="section-header">
               <h2>Tasks</h2>
-              <button id="createTaskBtn" class="btn primary-btn hidden">Create New Task</button>
+              <div style="display: flex; gap: 0.5rem;">
+                <button id="exportFilteredTasksBtn" class="btn secondary-btn">
+                  <i class="fas fa-file-pdf"></i> Export Filtered to PDF
+                </button>
+                <button id="createTaskBtn" class="btn primary-btn hidden">Create New Task</button>
+              </div>
             </div>
             <div class="search-filter-bar">
               
@@ -303,7 +308,12 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
           <section id="issuesSection" class="section hidden">
             <div class="section-header">
               <h2>Issues</h2>
-              <button id="createIssueBtn" class="btn primary-btn">Report Issue</button>
+              <div style="display: flex; gap: 0.5rem;">
+                <button id="exportFilteredIssuesBtn" class="btn secondary-btn">
+                  <i class="fas fa-file-pdf"></i> Export Filtered to PDF
+                </button>
+                <button id="createIssueBtn" class="btn primary-btn">Report Issue</button>
+              </div>
             </div>
             <div class="search-filter-bar">
               
@@ -368,7 +378,56 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
             
             <div class="section-header">
               <h2>Punch Lists</h2>
-              <button id="createPunchListBtn" class="btn primary-btn">+ New Punch List</button>
+              <div style="display: flex; gap: 0.5rem;">
+                <button id="exportFilteredPunchListsBtn" class="btn secondary-btn">
+                  <i class="fas fa-file-pdf"></i> Export Filtered to PDF
+                </button>
+                <button id="createPunchListBtn" class="btn primary-btn">+ New Punch List</button>
+              </div>
+            </div>
+            
+            <!-- Filter Section -->
+            <div class="search-filter-bar">
+              <div class="filter-row">
+                
+                <!--<div style="display: flex; gap: 0.25rem; align-items: center;">-->
+                  
+                  <select id="punchListProgressOperator">
+                    <option value="any">Any Progress</option>
+                    <option value="lt">Less Than</option>
+                    <option value="lte">Less Than or Equal</option>
+                    <option value="eq">Equal To</option>
+                    <option value="gte">Greater Than or Equal</option>
+                    <option value="gt">Greater Than</option>
+                  </select>
+                  <input type="number" class="search-input" id="punchListProgressValue" min="0" max="100" placeholder="%">
+                <!--</div>-->
+                
+                <select id="punchListVisibilityFilter">
+                  <option value="">All Visibility</option>
+                  <option value="public">Public</option>
+                  <option value="private">Private</option>
+                </select>
+                
+                <select id="punchListCreatedByFilter">
+                  <option value="">All Creators</option>
+                </select>
+                
+                <input type="date" id="punchListCreatedDateFilter" placeholder="Created Date">
+                <input type="text" class="search-input" id="punchListSearch" placeholder="Search by name, description...">
+                <!--<button id="clearPunchListFiltersBtn" class="btn secondary-btn small-btn">Clear Filters</button>-->
+              </div>
+            </div>
+            
+            <!-- Active Filter Chips -->
+            <div class="active-filters-container" id="punchListActiveFiltersContainer" style="margin-bottom: 1rem;">
+              <div class="active-filters-header">
+                <span class="filters-count" id="punchListFiltersCount">Filters (0)</span>
+                <button id="clearAllPunchListFiltersBtn" class="clear-all-filters-btn">Clear All</button>
+              </div>
+              <div id="punchListActiveFiltersList" class="active-filters-list">
+                <div class="no-active-filters">No active filters</div>
+              </div>
             </div>
             
             <!-- View Toggle -->
@@ -412,7 +471,12 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
           <section id="notesSection" class="section hidden">
             <div class="section-header">
               <h2>Notes</h2>
-              <button id="createNoteBtn" class="btn primary-btn">+ New Note</button>
+              <div style="display: flex; gap: 0.5rem;">
+                <button id="exportFilteredNotesBtn" class="btn secondary-btn">
+                  <i class="fas fa-file-pdf"></i> Export Filtered to PDF
+                </button>
+                <button id="createNoteBtn" class="btn primary-btn">+ New Note</button>
+              </div>
             </div>
             <div class="search-filter-bar">
               <div class="filter-row">
@@ -722,8 +786,7 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
           <div id="noteDescription" contenteditable="true" class="editor-content" placeholder="Enter note description..."></div>
         </div>
         <div style="display: flex; gap: 1rem;">
-          <button type="button" id="exportNoteToPdfBtn" class="btn secondary-btn" style="flex: 1;">Export to PDF</button>
-          <button type="submit" class="btn primary-btn" style="flex: 2;">Save Note</button>
+          <button type="submit" class="btn primary-btn" style="flex: 1;">Save Note</button>
         </div>
       </form>
     </div>
@@ -736,6 +799,11 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
       <div id="viewNoteContent"></div>
     </div>
   </div>
+  <!-- jsPDF for true text-based PDF generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- AutoTable for tables and layout -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+  <!-- Keep html2pdf for notes export if needed -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="app.js"></script>
 </body>

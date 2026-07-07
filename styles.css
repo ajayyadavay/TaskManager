@@ -1702,6 +1702,17 @@ body {
 .metric-completed .metric-number{
   color:#14b8a6;
 }
+
+.metric-expired{
+  background:#fef2f2;
+}
+.metric-expired .metric-icon{
+  background:#fecaca;
+  color:#dc2626;
+}
+.metric-expired .metric-number{
+  color:#dc2626;
+}
 /*
 .metric-closed{
   background:#fff5f5;

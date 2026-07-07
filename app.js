@@ -87,9 +87,27 @@ function setupEventListeners() {
     document.getElementById('punchListListView').classList.remove('hidden');
   });
   
+  // Punchlist filter listeners
+  ['punchListSearch', 'punchListProgressOperator', 'punchListProgressValue',
+   'punchListVisibilityFilter', 'punchListCreatedByFilter', 'punchListCreatedDateFilter']
+  .forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('input', renderPunchLists);
+      el.addEventListener('change', renderPunchLists);
+    }
+  });
+  
+  document.getElementById('clearPunchListFiltersBtn')?.addEventListener('click', clearPunchListFilters);
+  document.getElementById('clearAllPunchListFiltersBtn')?.addEventListener('click', clearPunchListFilters);
+  
+  document.getElementById('exportFilteredPunchListsBtn')?.addEventListener('click', exportFilteredPunchListsToPdf);
+  document.getElementById('exportFilteredTasksBtn')?.addEventListener('click', exportFilteredTasksToPdf);
+  document.getElementById('exportFilteredIssuesBtn')?.addEventListener('click', exportFilteredIssuesToPdf);
+  document.getElementById('exportFilteredNotesBtn')?.addEventListener('click', exportFilteredNotesToPdf);
+  
   // Notes buttons
   document.getElementById('createNoteBtn')?.addEventListener('click', () => openNoteModal());
-  document.getElementById('exportNoteToPdfBtn')?.addEventListener('click', exportNoteToPdf);
   
   // Editor toolbar
   document.querySelectorAll('.editor-btn').forEach(btn => {
@@ -991,6 +1009,7 @@ function setupRealtimeListeners() {
     .onSnapshot(snapshot => {
       punchListsCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       renderPunchLists();
+      populatePunchListCreatedByFilter();
     });
   
   // Listen for notes changes
@@ -1362,7 +1381,8 @@ function renderDashboardStats() {
     partiallyCompleted: 0,
     completed: 0,
     closed: 0,
-    rejected: 0
+    rejected: 0,
+    expired: 0
   };
   
   getVisibleTasksForCurrentUser(tasksCache).forEach(task => {
@@ -1375,6 +1395,10 @@ function renderDashboardStats() {
     if (dashboardStatus === 'completed') taskStats.completed++;
     if (dashboardStatus === 'closed') taskStats.closed++;
     if (dashboardStatus === 'rejected') taskStats.rejected++;
+    // Check for expired tasks
+    if (!isTaskFinished(task) && getTaskDeadlineOffset(task) < 0) {
+      taskStats.expired++;
+    }
     /*if (dashboardStatus === 'work_in_progress' || dashboardStatus === 'partially_completed') taskStats.wip++;
     if (dashboardStatus === 'completed' || dashboardStatus === 'closed') taskStats.completed++;*/
   });
@@ -1503,6 +1527,12 @@ document.getElementById('tasksMetricsGrid').innerHTML = `
   <div class="metric-icon"><i class="fas fa-lock"></i></div>
   <div class="metric-number">${taskStats.closed}</div>
   <div class="metric-label">Closed Tasks</div>
+</div>
+
+<div class="metric-card metric-expired">
+  <div class="metric-icon"><i class="fas fa-exclamation-triangle"></i></div>
+  <div class="metric-number">${taskStats.expired}</div>
+  <div class="metric-label">Expired Tasks</div>
 </div>
 `;
 
@@ -1787,6 +1817,9 @@ function renderTaskCard(task) {
       </div>
       <div class="task-actions">
         <button class="btn secondary-btn small-btn view-task-btn" data-id="${task.id}">View Details</button>
+        <button class="btn secondary-btn small-btn" onclick="exportTaskToPdf('${task.id}')">
+          <i class="fas fa-file-pdf"></i> Export PDF
+        </button>
         ${actions}
       </div>
     </div>
@@ -2182,6 +2215,9 @@ let trailHtml = `
     <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
       <h2 style="color: var(--primary); margin:0;">${task.taskId}</h2>
       <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <button class="btn secondary-btn small-btn" onclick="exportTaskToPdf('${task.id}')">
+          <i class="fas fa-file-pdf"></i> Export PDF
+        </button>
         ${task.priority ? `<span class="task-status" style="background: ${task.priority === 'High' ? '#fee2e2' : task.priority === 'Medium' ? '#fef3c7' : '#d1fae5'}; color: ${task.priority === 'High' ? '#dc2626' : task.priority === 'Medium' ? '#d97706' : '#059669'}">Priority: ${task.priority}</span>` : ''}
         <span class="task-status status-${task.status.replace('_', '-')}">${task.status.replace('_', ' ')}</span>
       </div>
@@ -2576,6 +2612,70 @@ function renderPunchLists() {
     pl.visibility === 'public' || pl.createdBy === currentUser.email
   );
   
+  // Filter to non-archived only
+  let filtered = visiblePunchLists.filter(pl => pl.status === 'active');
+  
+  const activeFilters = [];
+  
+  // Search filter
+  const search = document.getElementById('punchListSearch')?.value?.trim().toLowerCase() || '';
+  if (search) {
+    filtered = filtered.filter(pl => 
+      (pl.name && pl.name.toLowerCase().includes(search)) || 
+      (pl.description && pl.description.toLowerCase().includes(search))
+    );
+    activeFilters.push({type: 'search', value: search});
+  }
+  
+  // Progress filter
+  const progressOperator = document.getElementById('punchListProgressOperator')?.value || 'any';
+  const progressValue = document.getElementById('punchListProgressValue')?.value;
+  if (progressOperator !== 'any' && progressValue !== '') {
+    const pv = parseInt(progressValue, 10);
+    if (!isNaN(pv)) {
+      filtered = filtered.filter(pl => {
+        const prog = calculatePunchListProgress(pl);
+        switch (progressOperator) {
+          case 'lt': return prog < pv;
+          case 'lte': return prog <= pv;
+          case 'eq': return prog === pv;
+          case 'gte': return prog >= pv;
+          case 'gt': return prog > pv;
+          default: return true;
+        }
+      });
+      const opLabels = {
+        lt: '<', lte: '≤', eq: '=', gte: '≥', gt: '>'
+      };
+      activeFilters.push({type: 'progress', value: `${opLabels[progressOperator]} ${pv}%`});
+    }
+  }
+  
+  // Visibility filter
+  const visibilityFilter = document.getElementById('punchListVisibilityFilter')?.value || '';
+  if (visibilityFilter) {
+    filtered = filtered.filter(pl => pl.visibility === visibilityFilter);
+    activeFilters.push({type: 'visibility', value: visibilityFilter});
+  }
+  
+  // Created By filter
+  const createdByFilter = document.getElementById('punchListCreatedByFilter')?.value || '';
+  if (createdByFilter) {
+    filtered = filtered.filter(pl => pl.createdBy === createdByFilter);
+    const creatorName = usersCache.find(u => u.email === createdByFilter)?.name || createdByFilter;
+    activeFilters.push({type: 'createdBy', value: creatorName});
+  }
+  
+  // Created Date filter
+  const createdDateFilter = document.getElementById('punchListCreatedDateFilter')?.value || '';
+  if (createdDateFilter) {
+    filtered = filtered.filter(pl => pl.createdDate === createdDateFilter);
+    activeFilters.push({type: 'createdDate', value: createdDateFilter});
+  }
+  
+  // Render active filter chips
+  renderPunchListActiveFilters(activeFilters);
+  
   const metricsContainer = document.getElementById('punchListsMetricsGrid');
   if (metricsContainer) {
     const total = visiblePunchLists.length;
@@ -2731,7 +2831,7 @@ metricsContainer.innerHTML = `
     `;*/
   }
   
-  const activePunchLists = visiblePunchLists.filter(pl => pl.status === 'active');
+  const activePunchLists = filtered;
   const archivedPunchLists = visiblePunchLists.filter(pl => pl.status === 'archived');
   
   // Render card view
@@ -2740,7 +2840,7 @@ metricsContainer.innerHTML = `
     if (activePunchLists.length === 0) {
       cardContainer.innerHTML = `
         <div class="empty-state-card">
-          <p>No punch lists yet. Create one!</p>
+          <p>No punch lists found. Create one or adjust your filters!</p>
         </div>
       `;
     } else {
@@ -2766,91 +2866,18 @@ metricsContainer.innerHTML = `
               <div><strong>Visibility:</strong> ${pl.visibility}</div>
               <div><strong>Updated:</strong> ${getTimeAgo(pl.lastUpdatedAt)}</div>
             </div>
-            ${pl.createdBy === currentUser.email ? `
-              <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-                <button class="btn secondary-btn small-btn" onclick="event.stopPropagation(); openEditPunchListModal('${pl.id}')">Edit</button>
-                <button class="btn secondary-btn small-btn" onclick="event.stopPropagation(); archivePunchList('${pl.id}')">Archive</button>
-                <button class="btn secondary-btn small-btn" style="background: var(--danger-100); color: var(--danger-600);" onclick="event.stopPropagation(); deletePunchList('${pl.id}')">Delete</button>
-              </div>
-            ` : ''}
+            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem;" onclick="event.stopPropagation();">
+              <button class="btn secondary-btn small-btn" onclick="exportPunchListToPdf('${pl.id}')">
+                <i class="fas fa-file-pdf"></i> Export
+              </button>
+              ${pl.createdBy === currentUser.email ? `
+                <button class="btn secondary-btn small-btn" onclick="openEditPunchListModal('${pl.id}')">Edit</button>
+                <button class="btn secondary-btn small-btn" onclick="archivePunchList('${pl.id}')">Archive</button>
+                <button class="btn secondary-btn small-btn" style="background: var(--danger-100); color: var(--danger-600);" onclick="deletePunchList('${pl.id}')">Delete</button>
+              ` : ''}
+            </div>
           </div>
         `;
-
-
-/*
-        return `
-<div class="user-card punchlist-card"
-     onclick="openViewPunchListModal('${pl.id}')">
-
-  <div class="punchlist-header">
-
-    <div>
-      <div class="punchlist-id">${pl.punchListId}</div>
-      <div class="punchlist-title">${pl.name}</div>
-    </div>
-
-    <div class="punchlist-visibility ${pl.visibility}">
-      ${pl.visibility}
-    </div>
-
-  </div>
-
-  <div class="punchlist-progress">
-
-    <div class="punchlist-progress-header">
-      <span>Progress</span>
-      <span>${progress}%</span>
-    </div>
-
-    <div class="punchlist-progress-bar">
-      <div class="punchlist-progress-fill"
-           style="width:${progress}%">
-      </div>
-    </div>
-
-  </div>
-
-  <div class="punchlist-meta">
-
-    <div class="punchlist-meta-row">
-      <span>Created By</span>
-      <strong>${createdByName}</strong>
-    </div>
-
-    <div class="punchlist-meta-row">
-      <span>Last Updated</span>
-      <strong>${getTimeAgo(pl.lastUpdatedAt)}</strong>
-    </div>
-
-  </div>
-
-  ${
-    pl.createdBy === currentUser.email
-      ? `
-      <div class="punchlist-actions">
-        <button class="btn secondary-btn small-btn"
-                onclick="event.stopPropagation(); openEditPunchListModal('${pl.id}')">
-          Edit
-        </button>
-
-        <button class="btn secondary-btn small-btn"
-                onclick="event.stopPropagation(); archivePunchList('${pl.id}')">
-          Archive
-        </button>
-
-        <button class="btn secondary-btn small-btn"
-                style="background:var(--danger-100);color:var(--danger-600);"
-                onclick="event.stopPropagation(); deletePunchList('${pl.id}')">
-          Delete
-        </button>
-      </div>
-      `
-      : ''
-  }
-
-</div>
-`;*/
-
       }).join('');
     }
   }
@@ -2874,11 +2901,14 @@ metricsContainer.innerHTML = `
             <td style="padding: 1rem;">${createdByName}</td>
             <td style="padding: 1rem;">${pl.createdDate} ${pl.createdTime}</td>
             <td style="padding: 1rem;">
-              <button class="btn secondary-btn small-btn" onclick="openViewPunchListModal('${pl.id}')">View</button>
-              ${pl.createdBy === currentUser.email ? `
-                <button class="btn secondary-btn small-btn" onclick="openEditPunchListModal('${pl.id}')">Edit</button>
-                <button class="btn secondary-btn small-btn" onclick="archivePunchList('${pl.id}')">Archive</button>
-              ` : ''}
+              <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                <button class="btn secondary-btn small-btn" onclick="openViewPunchListModal('${pl.id}')">View</button>
+                <button class="btn secondary-btn small-btn" onclick="exportPunchListToPdf('${pl.id}')">Export</button>
+                ${pl.createdBy === currentUser.email ? `
+                  <button class="btn secondary-btn small-btn" onclick="openEditPunchListModal('${pl.id}')">Edit</button>
+                  <button class="btn secondary-btn small-btn" onclick="archivePunchList('${pl.id}')">Archive</button>
+                ` : ''}
+              </div>
             </td>
           </tr>
         `;
@@ -2914,7 +2944,10 @@ metricsContainer.innerHTML = `
               <div><strong>Visibility:</strong> ${pl.visibility}</div>
             </div>
             ${pl.createdBy === currentUser.email ? `
-              <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+              <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem;">
+                <button class="btn secondary-btn small-btn" onclick="exportPunchListToPdf('${pl.id}')">
+                  <i class="fas fa-file-pdf"></i> Export
+                </button>
                 <button class="btn secondary-btn small-btn" onclick="restorePunchList('${pl.id}')">Restore</button>
               </div>
             ` : ''}
@@ -2923,6 +2956,1708 @@ metricsContainer.innerHTML = `
       }).join('');
     }
   }
+}
+
+function renderPunchListActiveFilters(filters) {
+  const container = document.getElementById('punchListActiveFiltersList');
+  const countEl = document.getElementById('punchListFiltersCount');
+  
+  if (!container || !countEl) return;
+  
+  countEl.textContent = `Filters (${filters.length})`;
+  
+  if (filters.length === 0) {
+    container.innerHTML = `<div class="no-active-filters">No active filters</div>`;
+    return;
+  }
+  
+  container.innerHTML = filters.map((filter, index) => {
+    let label = '';
+    switch (filter.type) {
+      case 'search': label = `Search: "${filter.value}"`; break;
+      case 'progress': label = `Progress: ${filter.value}`; break;
+      case 'visibility': label = `Visibility: ${filter.value}`; break;
+      case 'createdBy': label = `Created By: ${filter.value}`; break;
+      case 'createdDate': label = `Created Date: ${filter.value}`; break;
+    }
+    
+    return `
+      <div class="filter-chip" style="background: var(--primary-50); color: var(--primary-700);">
+        <span class="filter-chip-label">${label}</span>
+        <button class="filter-chip-remove" onclick="removePunchListFilter(${index})" style="color: var(--primary-700);">×</button>
+      </div>
+    `;
+  }).join('');
+}
+
+function removePunchListFilter(index) {
+  const allFilters = [
+    {id: 'punchListSearch', clear: (el) => el.value = ''},
+    {id: 'punchListProgressOperator', clear: (el) => el.value = 'any'},
+    {id: 'punchListProgressValue', clear: (el) => el.value = ''},
+    {id: 'punchListVisibilityFilter', clear: (el) => el.value = ''},
+    {id: 'punchListCreatedByFilter', clear: (el) => el.value = ''},
+    {id: 'punchListCreatedDateFilter', clear: (el) => el.value = ''}
+  ];
+  
+  // Collect current active filter indices
+  let activeIndex = 0;
+  for (let i = 0; i < allFilters.length; i++) {
+    const el = document.getElementById(allFilters[i].id);
+    if (el) {
+      let isActive = false;
+      switch (allFilters[i].id) {
+        case 'punchListSearch': isActive = el.value.trim() !== ''; break;
+        case 'punchListProgressOperator': isActive = el.value !== 'any'; break;
+        case 'punchListProgressValue': 
+          const opEl = document.getElementById('punchListProgressOperator');
+          isActive = opEl?.value !== 'any' && el.value !== ''; break;
+        case 'punchListVisibilityFilter': isActive = el.value !== ''; break;
+        case 'punchListCreatedByFilter': isActive = el.value !== ''; break;
+        case 'punchListCreatedDateFilter': isActive = el.value !== ''; break;
+      }
+      if (isActive) {
+        if (activeIndex === index) {
+          // Clear this filter
+          allFilters[i].clear(el);
+          if (allFilters[i].id === 'punchListProgressOperator') {
+            const valEl = document.getElementById('punchListProgressValue');
+            if (valEl) valEl.value = '';
+          }
+          break;
+        }
+        activeIndex++;
+      }
+    }
+  }
+  
+  renderPunchLists();
+}
+
+function clearPunchListFilters() {
+  document.getElementById('punchListSearch').value = '';
+  document.getElementById('punchListProgressOperator').value = 'any';
+  document.getElementById('punchListProgressValue').value = '';
+  document.getElementById('punchListVisibilityFilter').value = '';
+  document.getElementById('punchListCreatedByFilter').value = '';
+  document.getElementById('punchListCreatedDateFilter').value = '';
+  renderPunchLists();
+}
+
+function populatePunchListCreatedByFilter() {
+  const filter = document.getElementById('punchListCreatedByFilter');
+  if (!filter) return;
+  
+  const currentValue = filter.value;
+  
+  // Get all unique creators from visible punch lists
+  const visiblePunchLists = punchListsCache.filter(pl => 
+    pl.visibility === 'public' || pl.createdBy === currentUser.email
+  );
+  const creators = [...new Set(visiblePunchLists.map(pl => pl.createdBy))];
+  
+  filter.innerHTML = `<option value="">All Creators</option>` +
+    creators.map(email => {
+      const user = usersCache.find(u => u.email === email);
+      const name = user?.name || email;
+      return `<option value="${email}" ${email === currentValue ? 'selected' : ''}>${name}</option>`;
+    }).join('');
+}
+
+/**
+ * Helper function to get filtered punch lists for export
+ */
+function getFilteredPunchListsForExport() {
+  const visiblePunchLists = punchListsCache.filter(pl => 
+    pl.visibility === 'public' || pl.createdBy === currentUser.email
+  );
+  let filtered = visiblePunchLists.filter(pl => pl.status === 'active');
+  
+  // Apply same filter logic as renderPunchLists
+  const search = document.getElementById('punchListSearch')?.value?.trim().toLowerCase() || '';
+  if (search) {
+    filtered = filtered.filter(pl => 
+      (pl.name && pl.name.toLowerCase().includes(search)) || 
+      (pl.description && pl.description.toLowerCase().includes(search))
+    );
+  }
+  
+  const progressOperator = document.getElementById('punchListProgressOperator')?.value || 'any';
+  const progressValue = document.getElementById('punchListProgressValue')?.value;
+  if (progressOperator !== 'any' && progressValue !== '') {
+    const pv = parseInt(progressValue, 10);
+    if (!isNaN(pv)) {
+      filtered = filtered.filter(pl => {
+        const prog = calculatePunchListProgress(pl);
+        switch (progressOperator) {
+          case 'lt': return prog < pv;
+          case 'lte': return prog <= pv;
+          case 'eq': return prog === pv;
+          case 'gte': return prog >= pv;
+          case 'gt': return prog > pv;
+          default: return true;
+        }
+      });
+    }
+  }
+  
+  const visibilityFilter = document.getElementById('punchListVisibilityFilter')?.value || '';
+  if (visibilityFilter) {
+    filtered = filtered.filter(pl => pl.visibility === visibilityFilter);
+  }
+  
+  const createdByFilter = document.getElementById('punchListCreatedByFilter')?.value || '';
+  if (createdByFilter) {
+    filtered = filtered.filter(pl => pl.createdBy === createdByFilter);
+  }
+  
+  const createdDateFilter = document.getElementById('punchListCreatedDateFilter')?.value || '';
+  if (createdDateFilter) {
+    filtered = filtered.filter(pl => pl.createdDate === createdDateFilter);
+  }
+  
+  return filtered;
+}
+
+/**
+ * Helper function to format date/time nicely
+ */
+function formatDateTimeForPdf(dateString, timeString) {
+  if (!dateString) return 'N/A';
+  const parts = dateString.split('-'); // YYYY-MM-DD
+  if (parts.length === 3) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const year = parseInt(parts[0]);
+    const month = parseInt(parts[1]) - 1;
+    const day = parseInt(parts[2]);
+    const date = new Date(year, month, day);
+    const formattedDate = `${day} ${months[month]} ${year}`;
+    return `${formattedDate}${timeString ? ' ' + timeString : ''}`;
+  }
+  return dateString + (timeString ? ' ' + timeString : '');
+}
+
+/**
+ * Export a single punch list to PDF using jsPDF (true text-based)
+ */
+window.exportPunchListToPdf = function(punchListId) {
+  const pl = punchListsCache.find(p => p.id === punchListId);
+  if (!pl) return;
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+
+  // Constants
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const marginLeft = 15;
+  const marginRight = 15;
+  const marginTop = 15;
+  const marginBottom = 15;
+  const contentWidth = pageWidth - marginLeft - marginRight;
+  
+  // Helpers
+  let yPos = marginTop;
+  let pageNumber = 1;
+
+  const addHeader = () => {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.text('Punch List Report', pageWidth / 2, yPos, { align: 'center' });
+    yPos += 8;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(107, 114, 128); // gray-500
+    const now = new Date();
+    doc.text(`Generated: ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`, pageWidth / 2, yPos, { align: 'center' });
+    yPos += 6;
+    doc.text(`Total: 1 Punch List`, pageWidth / 2, yPos, { align: 'center' });
+    yPos += 8;
+    // Separator line
+    doc.setDrawColor(229, 231, 235);
+    doc.setLineWidth(0.5);
+    doc.line(marginLeft, yPos, pageWidth - marginRight, yPos);
+    yPos += 10;
+    doc.setTextColor(0, 0, 0);
+  };
+
+  const addPage = () => {
+    doc.addPage();
+    yPos = marginTop;
+    pageNumber++;
+    addHeader();
+  };
+
+  const checkPageBreak = (neededSpace) => {
+    if (yPos + neededSpace > pageHeight - marginBottom) {
+      addPage();
+    }
+  };
+
+  // Start building
+  addHeader();
+
+  // 1. Punch List Header
+  const progress = calculatePunchListProgress(pl);
+  const createdByName = usersCache.find(u => u.email === pl.createdBy)?.name || pl.createdBy;
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  // Split text if needed
+  const headerText = `${pl.punchListId} — ${pl.name}`;
+  const splitHeader = doc.splitTextToSize(headerText, contentWidth);
+  splitHeader.forEach(line => {
+    checkPageBreak(6);
+    doc.text(line, marginLeft, yPos);
+    yPos += 6;
+  });
+  
+  // 2. Progress
+  checkPageBreak(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.text('Progress:', marginLeft, yPos);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(59, 130, 246); // blue-500
+  doc.text(`${progress}%`, marginLeft + 30, yPos);
+  doc.setTextColor(0,0,0);
+  yPos += 10;
+
+  // 3. Description
+  if (pl.description) {
+    checkPageBreak(20);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text('Description:', marginLeft, yPos);
+    yPos += 6;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    const descLines = doc.splitTextToSize(pl.description, contentWidth);
+    descLines.forEach(line => {
+      checkPageBreak(6);
+      doc.text(line, marginLeft, yPos);
+      yPos += 5;
+    });
+    yPos += 4;
+  }
+
+  // 4. Checklist Items
+  checkPageBreak(15);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.text('Checklist Items:', marginLeft, yPos);
+  yPos += 8;
+  
+  if (!pl.items || pl.items.length === 0) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(107, 114, 128);
+    checkPageBreak(6);
+    doc.text('No checklist items available.', marginLeft, yPos);
+    yPos += 5;
+    doc.setTextColor(0,0,0);
+  } else {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    pl.items.forEach(item => {
+      checkPageBreak(10);
+      const text = item.description || 'Untitled item';
+      const textLines = doc.splitTextToSize(text, contentWidth - 12);
+      const checkboxSize = 4;
+      const checkboxX = marginLeft;
+      const checkboxY = yPos - 3; // Adjust position to align with text
+      
+      // Set text color
+      doc.setTextColor(item.completed ? 107 : 0, item.completed ? 114 : 0, item.completed ? 128 : 0); // gray if completed
+      
+      // Draw checkbox border
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.2);
+      doc.rect(checkboxX, checkboxY, checkboxSize, checkboxSize);
+      
+      // Fill or add checkmark if completed
+      if (item.completed) {
+        // Draw a simple checkmark with lines
+        doc.setLineWidth(0.3);
+        doc.line(checkboxX + 1, checkboxY + 2, checkboxX + 2, checkboxY + 3);
+        doc.line(checkboxX + 2, checkboxY + 3, checkboxX + 3, checkboxY + 1);
+      }
+      
+      // Text
+      doc.text(textLines[0], marginLeft + 8, yPos);
+      yPos += 5;
+      
+      // Remaining lines
+      for (let i = 1; i < textLines.length; i++) {
+        checkPageBreak(6);
+        doc.text(textLines[i], marginLeft + 8, yPos);
+        yPos +=5;
+      }
+      doc.setTextColor(0,0,0);
+    });
+  }
+  
+  // 5. Footer Info
+  checkPageBreak(20);
+  // Separator
+  doc.setDrawColor(229, 231, 235);
+  doc.line(marginLeft, yPos, pageWidth - marginRight, yPos);
+  yPos +=6;
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(107,114,128);
+  const footerText = [
+    `Created by: ${createdByName}`,
+    `Created on: ${formatDateTimeForPdf(pl.createdDate, pl.createdTime)}`
+  ];
+  if (pl.lastUpdatedDate || pl.lastUpdatedTime) {
+    footerText.push(`Last updated: ${formatDateTimeForPdf(pl.lastUpdatedDate, pl.lastUpdatedTime)}`);
+  }
+  footerText.forEach(line => {
+    checkPageBreak(5);
+    doc.text(line, marginLeft, yPos);
+    yPos +=5;
+  });
+  
+  // Filename
+  const now = new Date();
+  const timestamp = now.getFullYear() +
+    String(now.getMonth() + 1).padStart(2, '0') +
+    String(now.getDate()).padStart(2, '0') +
+    String(now.getHours()).padStart(2, '0') +
+    String(now.getMinutes()).padStart(2, '0') +
+    String(now.getSeconds()).padStart(2, '0');
+  const filename = `${pl.name.replace(/[^a-z0-9]/gi, '_')}_${timestamp}.pdf`;
+  doc.save(filename);
+};
+
+/**
+ * Export all filtered punch lists to PDF using jsPDF (true text-based)
+ */
+function exportFilteredPunchListsToPdf() {
+  const filtered = getFilteredPunchListsForExport();
+  
+  if (filtered.length === 0) {
+    alert('No active punch lists available.');
+    return;
+  }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+
+  // Constants
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const marginLeft = 15;
+  const marginRight = 15;
+  const marginTop = 15;
+  const marginBottom = 15;
+  const contentWidth = pageWidth - marginLeft - marginRight;
+  
+  // Helpers
+  let yPos = marginTop;
+  let pageNumber = 1;
+
+  const addHeader = () => {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.text('Punch List Report', pageWidth / 2, yPos, { align: 'center' });
+    yPos += 8;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(107, 114, 128); // gray-500
+    const now = new Date();
+    doc.text(`Generated: ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`, pageWidth / 2, yPos, { align: 'center' });
+    yPos += 6;
+    doc.text(`Total: ${filtered.length} Punch List${filtered.length !== 1 ? 's' : ''}`, pageWidth / 2, yPos, { align: 'center' });
+    yPos += 8;
+    // Separator line
+    doc.setDrawColor(229, 231, 235);
+    doc.setLineWidth(0.5);
+    doc.line(marginLeft, yPos, pageWidth - marginRight, yPos);
+    yPos += 10;
+    doc.setTextColor(0, 0, 0);
+  };
+
+  const addPage = () => {
+    doc.addPage();
+    yPos = marginTop;
+    pageNumber++;
+    addHeader();
+  };
+
+  const checkPageBreak = (neededSpace) => {
+    if (yPos + neededSpace > pageHeight - marginBottom) {
+      addPage();
+    }
+  };
+
+  // Start building
+  addHeader();
+
+  // Render each punch list
+  filtered.forEach((pl, index) => {
+    if (index > 0) {
+      checkPageBreak(20);
+      // Divider before next punchlist
+      doc.setDrawColor(229, 231, 235);
+      doc.setLineWidth(1);
+      doc.line(marginLeft + 20, yPos, pageWidth - marginRight - 20, yPos);
+      yPos +=12;
+    }
+    
+    // 1. Punch List Header
+    const progress = calculatePunchListProgress(pl);
+    const createdByName = usersCache.find(u => u.email === pl.createdBy)?.name || pl.createdBy;
+    
+    checkPageBreak(30); // Reserve space for header + some content
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    const headerText = `${pl.punchListId} — ${pl.name}`;
+    const splitHeader = doc.splitTextToSize(headerText, contentWidth);
+    splitHeader.forEach(line => {
+      checkPageBreak(6);
+      doc.text(line, marginLeft, yPos);
+      yPos += 6;
+    });
+    
+    // 2. Progress
+    checkPageBreak(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text('Progress:', marginLeft, yPos);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(59, 130, 246); // blue-500
+    doc.text(`${progress}%`, marginLeft + 30, yPos);
+    doc.setTextColor(0,0,0);
+    yPos += 10;
+
+    // 3. Description
+    if (pl.description) {
+      checkPageBreak(20);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.text('Description:', marginLeft, yPos);
+      yPos += 6;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      const descLines = doc.splitTextToSize(pl.description, contentWidth);
+      descLines.forEach(line => {
+        checkPageBreak(6);
+        doc.text(line, marginLeft, yPos);
+        yPos += 5;
+      });
+      yPos += 4;
+    }
+
+    // 4. Checklist Items
+    checkPageBreak(15);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text('Checklist Items:', marginLeft, yPos);
+    yPos += 8;
+    
+    if (!pl.items || pl.items.length === 0) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(107, 114, 128);
+      checkPageBreak(6);
+      doc.text('No checklist items available.', marginLeft, yPos);
+      yPos += 5;
+      doc.setTextColor(0,0,0);
+    } else {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      pl.items.forEach(item => {
+        checkPageBreak(10);
+        const text = item.description || 'Untitled item';
+        const textLines = doc.splitTextToSize(text, contentWidth - 12);
+        const checkboxSize = 4;
+        const checkboxX = marginLeft;
+        const checkboxY = yPos - 3; // Adjust position to align with text
+        
+        // Set text color
+        doc.setTextColor(item.completed ? 107 : 0, item.completed ? 114 : 0, item.completed ? 128 : 0); // gray if completed
+        
+        // Draw checkbox border
+        doc.setDrawColor(0, 0, 0);
+        doc.setLineWidth(0.2);
+        doc.rect(checkboxX, checkboxY, checkboxSize, checkboxSize);
+        
+        // Draw checkmark if completed
+        if (item.completed) {
+          doc.setLineWidth(0.3);
+          doc.line(checkboxX + 1, checkboxY + 2, checkboxX + 2, checkboxY + 3);
+          doc.line(checkboxX + 2, checkboxY + 3, checkboxX + 3, checkboxY + 1);
+        }
+        
+        // Text
+        doc.text(textLines[0], marginLeft + 8, yPos);
+        yPos += 5;
+        
+        // Remaining lines
+        for (let i = 1; i < textLines.length; i++) {
+          checkPageBreak(6);
+          doc.text(textLines[i], marginLeft + 8, yPos);
+          yPos +=5;
+        }
+        doc.setTextColor(0,0,0);
+      });
+    }
+    
+    // 5. Footer Info for this punch list
+    checkPageBreak(20);
+    doc.setDrawColor(229, 231, 235);
+    doc.setLineWidth(0.3);
+    doc.line(marginLeft, yPos, pageWidth - marginRight, yPos);
+    yPos +=6;
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(107,114,128);
+    const footerText = [
+      `Created by: ${createdByName}`,
+      `Created on: ${formatDateTimeForPdf(pl.createdDate, pl.createdTime)}`
+    ];
+    if (pl.lastUpdatedDate || pl.lastUpdatedTime) {
+      footerText.push(`Last updated: ${formatDateTimeForPdf(pl.lastUpdatedDate, pl.lastUpdatedTime)}`);
+    }
+    footerText.forEach(line => {
+      checkPageBreak(5);
+      doc.text(line, marginLeft, yPos);
+      yPos +=5;
+    });
+    yPos +=4;
+  });
+  
+  // Filename
+  const now = new Date();
+  const timestamp = now.getFullYear() +
+    String(now.getMonth() + 1).padStart(2, '0') +
+    String(now.getDate()).padStart(2, '0') +
+    String(now.getHours()).padStart(2, '0') +
+    String(now.getMinutes()).padStart(2, '0') +
+    String(now.getSeconds()).padStart(2, '0');
+  const filename = `PunchLists_${timestamp}.pdf`;
+  doc.save(filename);
+}
+
+// ------------------------------
+// Task Export Functions
+// ------------------------------
+
+// Helper: Format status for display
+function formatTaskStatus(status) {
+  return status ? status.replace(/_/g, ' ') : 'Unknown';
+}
+
+// Helper: Get user name from email
+function getUserName(email) {
+  if (!email) return 'Not Assigned';
+  const user = usersCache.find(u => u.email === email);
+  return user?.name || email;
+}
+
+// Get filtered tasks for export (reuses logic from loadTasks)
+function getFilteredTasksForExport() {
+  const activeTab = document.querySelector('.tab-btn.active')?.dataset.tab || 'all';
+  let tasks = getVisibleTasksForCurrentUser(tasksCache);
+  
+  // Apply tab filter
+  if (activeTab === 'primary') {
+    tasks = tasks.filter(t => t.primaryUser === currentUser.email);
+  } else if (activeTab === 'secondary') {
+    tasks = tasks.filter(t => t.secondaryUser === currentUser.email && t.status !== 'pending');
+  }
+
+  // Apply search and filter
+  const searchTerm = document.getElementById('taskSearch').value.toLowerCase();
+  const statusFilter = document.getElementById('taskStatusFilter').value;
+  const primaryFilter = document.getElementById('taskPrimaryFilter').value;
+  const secondaryFilter = document.getElementById('taskSecondaryFilter').value;
+  const dateFilter = document.getElementById('taskDateFilter').value;
+  const deadlineFilter = document.getElementById('taskDeadlineFilter').value;
+  const remainingDaysFilter = document.getElementById('taskRemainingDaysFilter').value.trim();
+  const priorityFilter = document.getElementById('taskPriorityFilter')?.value;
+  const categoryFilter = document.getElementById('taskCategoryFilter')?.value;
+  const projectFilter = document.getElementById('taskProjectFilter')?.value;
+
+  if (searchTerm) {
+    tasks = tasks.filter(t => 
+      t.taskId.toLowerCase().includes(searchTerm) || 
+      t.description.toLowerCase().includes(searchTerm)
+    );
+  }
+
+  if (statusFilter) {
+    tasks = tasks.filter(t => t.status === statusFilter);
+  }
+
+  if (primaryFilter) {
+    tasks = tasks.filter(t => t.primaryUser === primaryFilter);
+  }
+
+  if (secondaryFilter) {
+    tasks = tasks.filter(t => t.secondaryUser === secondaryFilter);
+  }
+
+  if (dateFilter) {
+    tasks = tasks.filter(t => t.assignedDate === dateFilter);
+  }
+  
+  if (deadlineFilter) {
+    tasks = tasks.filter(t => t.deadline === deadlineFilter);
+  }
+  
+  if (remainingDaysFilter) {
+    const remainingDays = parseInt(remainingDaysFilter, 10);
+    if (!isNaN(remainingDays)) {
+      tasks = tasks.filter(t => {
+        const remaining = getTaskDeadlineOffset(t);
+        return remaining === remainingDays;
+      });
+    }
+  }
+  
+  if (priorityFilter) {
+    tasks = tasks.filter(t => t.priority === priorityFilter);
+  }
+  
+  if (categoryFilter) {
+    tasks = tasks.filter(t => t.categoryId === categoryFilter);
+  }
+  
+  if (projectFilter) {
+    tasks = tasks.filter(t => t.projectId === projectFilter);
+  }
+
+  return tasks;
+}
+
+// Render single task in PDF
+function renderTaskInPdf(doc, task, yPos, marginLeft, marginRight, pageWidth, pageHeight) {
+  const { jsPDF } = window.jspdf;
+  const contentWidth = pageWidth - marginLeft - marginRight;
+  let currentY = yPos;
+  
+  // Helper to check page break
+  const checkPageBreak = (needed) => {
+    if (currentY + needed > pageHeight - 20) { // 20mm footer space
+      doc.addPage();
+      // Redraw header and set currentY to the returned starting position for content
+      currentY = addPdfHeader(doc, pageWidth); 
+    }
+  };
+  
+  // Draw task separator
+  checkPageBreak(30);
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.5);
+  doc.rect(marginLeft - 2, currentY - 3, contentWidth + 4, 1);
+  currentY += 5;
+  
+  // 1. Task ID (large bold)
+  checkPageBreak(15);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.setTextColor(34, 34, 34);
+  doc.text(task.taskId, marginLeft, currentY);
+  currentY += 12;
+  
+  // 2. Description
+  if (task.description) {
+    checkPageBreak(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text('Description:', marginLeft, currentY);
+    currentY += 6;
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    const descLines = doc.splitTextToSize(task.description, contentWidth);
+    descLines.forEach(line => {
+      checkPageBreak(6);
+      doc.text(line, marginLeft, currentY);
+      currentY += 5;
+    });
+    currentY += 3;
+  }
+  
+  // 3. Task Details (4-column grid table)
+  checkPageBreak(25);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text('Task Details:', marginLeft, currentY);
+  currentY += 8;
+  
+  // Calculate column widths
+  const labelColumnWidth = 35; // mm
+  const valueColumnWidth = (contentWidth - (labelColumnWidth * 2)) / 2;
+  
+  // Create 4-column table data
+  const taskDetailsTableBody = [
+    [
+      'Primary User', getUserName(task.primaryUser), 'Secondary User', getUserName(task.secondaryUser)],
+    [
+      'Category', task.categoryName || 'Not Specified', 'Project', task.projectName || 'Not Specified'
+    ],
+    [
+      'Assigned On', `${task.assignedDate || 'N/A'} ${task.assignedTime || ''}`.trim(), 'Deadline', task.deadline || 'N/A'
+    ],
+    [
+      'Duration', task.duration ? `${task.duration} days` : 'N/A', 'Priority', task.priority || 'Not Specified'
+    ],
+    [
+      'Status', formatTaskStatus(task.status), '', ''
+    ]
+  ];
+  
+  // Use autotable for clean grid table
+  // @ts-ignore
+  doc.autoTable({
+    startY: currentY,
+    margin: { left: marginLeft, right: marginRight },
+    body: taskDetailsTableBody,
+    theme: 'grid',
+    showHead: false,
+    tableWidth: contentWidth,
+    lineWidth: 0.2,
+    styles: {
+      fontSize: 10,
+      cellPadding: 3,
+      valign: 'middle',
+      overflow: 'linebreak',
+      lineColor: [220, 220, 220],
+    },
+    columnStyles: {
+      0: { fontStyle: 'bold', cellWidth: labelColumnWidth },
+      1: { cellWidth: valueColumnWidth },
+      2: { fontStyle: 'bold', cellWidth: labelColumnWidth },
+      3: { cellWidth: valueColumnWidth }
+    }
+  });
+  
+  // @ts-ignore
+  currentY = doc.lastAutoTable.finalY + 4;
+  
+  // Add remarks if available (still single column)
+  if (task.remarks) {
+    checkPageBreak(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text('Remarks:', marginLeft, currentY);
+    currentY += 6;
+    
+    doc.setFont('helvetica', 'normal');
+    const remarksLines = doc.splitTextToSize(task.remarks, contentWidth - 10);
+    remarksLines.forEach(line => {
+      checkPageBreak(6);
+      doc.text(line, marginLeft + 10, currentY);
+      currentY += 5;
+    });
+    currentY += 3;
+  }
+  
+  currentY += 4;
+  
+  // 4. Progress Updates
+  if (task.progress && task.progress.length > 0) {
+    checkPageBreak(15);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text('Progress Updates:', marginLeft, currentY);
+    currentY += 8;
+    
+    // Filter for admin (show only verified)
+    let progressToShow = task.progress;
+    const isAdmin = currentUserData?.isAdmin;
+    if (isAdmin) {
+      progressToShow = task.progress.filter(p => p.verifiedByPrimary === true);
+    }
+    
+    progressToShow.forEach((p, idx) => {
+      if (idx > 0) {
+        checkPageBreak(5);
+        doc.setDrawColor(229, 231, 235);
+        doc.setLineWidth(0.3);
+        doc.line(marginLeft, currentY - 2, pageWidth - marginRight, currentY - 2);
+        currentY += 4;
+      }
+      
+      checkPageBreak(25);
+      
+      // Draw colored circle for status indicator
+      const isPrimary = p.user === task.primaryUser;
+      const circleColor = isPrimary ? [22, 163, 74] : [220, 38, 38]; // green or red
+      doc.setFillColor(...circleColor);
+      doc.circle(marginLeft + 2, currentY - 2, 2, 'F');
+      
+      // Show user name
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(0, 0, 0);
+      doc.text(getUserName(p.user), marginLeft + 8, currentY);
+      currentY += 5;
+      
+      // Show date and time
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(107, 114, 128);
+      doc.text(`${p.date} ${p.time}`, marginLeft + 8, currentY);
+      currentY += 5;
+      
+      doc.setTextColor(0, 0, 0);
+      if (p.status && p.type !== 'verification_note') {
+        checkPageBreak(6);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Status: ${formatTaskStatus(p.status)}`, marginLeft + 8, currentY);
+        currentY += 5;
+      }
+      
+      doc.setFont('helvetica', 'normal');
+      const descText = p.type === 'verification_note' 
+        ? `Verification Note: ${p.description}` 
+        : p.description;
+      const descLines = doc.splitTextToSize(descText, contentWidth - 8);
+      descLines.forEach(line => {
+        checkPageBreak(6);
+        doc.text(line, marginLeft + 8, currentY);
+        currentY += 5;
+      });
+      
+      currentY += 2;
+    });
+    
+    currentY += 4;
+  }
+  
+  // 5. Trail History
+  if (task.trail && task.trail.length > 0) {
+    checkPageBreak(15);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text('Activity Trail:', marginLeft, currentY);
+    currentY += 8;
+    
+    // Draw table using autotable
+    const trailData = task.trail.map(t => [
+      t.action,
+      getUserName(t.user),
+      `${t.date} ${t.time}`,
+      t.details
+    ]);
+    
+    const tableOptions = {
+      startY: currentY,
+      margin: { left: marginLeft, right: marginRight },
+      head: [['Action', 'User', 'Date & Time', 'Details']],
+      body: trailData,
+      theme: 'grid',
+      headStyles: {
+        fillColor: [59, 130, 246],
+        textColor: 255,
+        fontSize: 9,
+        fontStyle: 'bold'
+      },
+      bodyStyles: {
+        fontSize: 8,
+        textColor: 34
+      },
+      alternateRowStyles: {
+        fillColor: [243, 244, 246]
+      },
+      //tableWidth: 'wrap'
+    };
+    
+    // @ts-ignore (we know autotable is available)
+    doc.autoTable(tableOptions);
+    
+    // @ts-ignore
+    currentY = doc.lastAutoTable.finalY + 8;
+  }
+  
+  // 6. Assignment History
+  if (task.assignmentHistory && task.assignmentHistory.length > 0 && currentUserData?.isAdmin) {
+    checkPageBreak(15);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text('Assignment History:', marginLeft, currentY);
+    currentY += 8;
+    
+    const assignmentData = task.assignmentHistory.map(h => [
+      getUserName(h.previousAssignee),
+      getUserName(h.newAssignee),
+      `${h.date} ${h.time}`,
+      h.remarks || 'N/A'
+    ]);
+    
+    const tableOptions = {
+      startY: currentY,
+      margin: { left: marginLeft, right: marginRight },
+      head: [['From', 'To', 'Date & Time', 'Remarks']],
+      body: assignmentData,
+      theme: 'grid',
+      headStyles: {
+        fillColor: [16, 185, 129],
+        textColor: 255,
+        fontSize: 9,
+        fontStyle: 'bold'
+      },
+      bodyStyles: {
+        fontSize: 8,
+        textColor: 34
+      },
+      alternateRowStyles: {
+        fillColor: [240, 253, 244]
+      }
+    };
+    
+    // @ts-ignore
+    doc.autoTable(tableOptions);
+    
+    // @ts-ignore
+    currentY = doc.lastAutoTable.finalY + 8;
+  }
+  
+  return currentY + 10; // Return new Y position
+}
+
+// Add header to PDF page
+function addPdfHeader(doc, pageWidth, totalTasks = null) {
+  const marginLeft = 15;
+  let yPos = 15;
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.text('Task Report', pageWidth / 2, yPos, { align: 'center' });
+  yPos += 7;
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(107, 114, 128);
+  
+  const now = new Date();
+  const dateStr = now.toLocaleDateString();
+  const timeStr = now.toLocaleTimeString();
+  doc.text(`Generated On: ${dateStr} ${timeStr}`, pageWidth / 2, yPos, { align: 'center' });
+  yPos += 5;
+  
+  doc.text(`Generated By: ${currentUser?.name || currentUser?.email || 'User'}`, pageWidth / 2, yPos, { align: 'center' });
+  yPos += 5;
+  
+  if (totalTasks !== null) {
+    doc.text(`Total Tasks: ${totalTasks}`, pageWidth / 2, yPos, { align: 'center' });
+    yPos += 5;
+  }
+  
+  doc.setDrawColor(229, 231, 235);
+  doc.setLineWidth(0.5);
+  doc.line(marginLeft, yPos, pageWidth - marginLeft, yPos);
+  doc.setTextColor(0, 0, 0);
+  
+  return yPos + 8; // Return starting Y for content
+}
+
+// Single task export
+window.exportTaskToPdf = function(taskId) {
+  const task = tasksCache.find(t => t.id === taskId);
+  if (!task) return;
+  
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+  
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const marginLeft = 15;
+  const marginRight = 15;
+  
+  // Initial header
+  let yPos = addPdfHeader(doc, pageWidth);
+  
+  // Render the task
+  renderTaskInPdf(doc, task, yPos, marginLeft, marginRight, pageWidth, pageHeight);
+  
+  // Save
+  const now = new Date();
+  const timestamp = now.getFullYear() +
+    String(now.getMonth() + 1).padStart(2, '0') +
+    String(now.getDate()).padStart(2, '0') +
+    String(now.getHours()).padStart(2, '0') +
+    String(now.getMinutes()).padStart(2, '0') +
+    String(now.getSeconds()).padStart(2, '0');
+  const filename = `${task.taskId.replace(/[^a-z0-9-_]/gi, '_')}_${timestamp}.pdf`;
+  doc.save(filename);
+};
+
+// Bulk export filtered tasks
+function exportFilteredTasksToPdf() {
+  const tasks = getFilteredTasksForExport();
+  
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+  
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const marginLeft = 15;
+  const marginRight = 15;
+  
+  if (tasks.length === 0) {
+    // Empty state
+    let yPos = addPdfHeader(doc, pageWidth, 0);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(107, 114, 128);
+    doc.text('No tasks available for export.', pageWidth / 2, yPos + 50, { align: 'center' });
+  } else {
+    // Initial header
+    let yPos = addPdfHeader(doc, pageWidth, tasks.length);
+    
+    tasks.forEach((task, index) => {
+      yPos = renderTaskInPdf(doc, task, yPos, marginLeft, marginRight, pageWidth, pageHeight);
+    });
+  }
+  
+  // Add page numbers to all pages
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(107, 114, 128);
+    doc.text(`Page ${i} of ${totalPages}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
+  }
+  
+  // Save
+  const now = new Date();
+  const timestamp = now.getFullYear() +
+    String(now.getMonth() + 1).padStart(2, '0') +
+    String(now.getDate()).padStart(2, '0') +
+    String(now.getHours()).padStart(2, '0') +
+    String(now.getMinutes()).padStart(2, '0') +
+    String(now.getSeconds()).padStart(2, '0');
+  const filename = `Tasks_Report_${timestamp}.pdf`;
+  doc.save(filename);
+}
+
+// ------------------------------
+// Issues Export Functions
+// ------------------------------
+
+// Get filtered issues for export (reusing same logic as loadIssues)
+function getFilteredIssuesForExport() {
+  let issues = [...issuesCache];
+  const isAdmin = currentUserData?.isAdmin;
+
+  if (!isAdmin) {
+    issues = issues.filter(i => i.reportedBy === currentUser.email);
+  }
+
+  // Apply search and filter
+  const searchTerm = document.getElementById('issueSearch').value.toLowerCase();
+  const statusFilter = document.getElementById('issueStatusFilter').value;
+  const reportedByFilter = document.getElementById('issueReportedByFilter').value;
+  const dateFilter = document.getElementById('issueDateFilter').value;
+
+  if (searchTerm) {
+    issues = issues.filter(i => 
+      i.description.toLowerCase().includes(searchTerm) || 
+      (i.obtainedFrom && i.obtainedFrom.toLowerCase().includes(searchTerm)) ||
+      (i.remarks && i.remarks.toLowerCase().includes(searchTerm))
+    );
+  }
+
+  if (statusFilter) {
+    issues = issues.filter(i => i.status === statusFilter);
+  }
+
+  if (reportedByFilter) {
+    issues = issues.filter(i => i.reportedBy === reportedByFilter);
+  }
+
+  if (dateFilter) {
+    issues = issues.filter(i => i.reportedDate === dateFilter);
+  }
+
+  return issues;
+}
+
+// Get active filters as strings for PDF header
+function getActiveIssueFiltersString() {
+  const searchVal = document.getElementById('issueSearch').value.trim();
+  const statusVal = document.getElementById('issueStatusFilter').value;
+  const reportedByVal = document.getElementById('issueReportedByFilter').value;
+  const dateVal = document.getElementById('issueDateFilter').value;
+  
+  const filters = [];
+  
+  if (searchVal) {
+    filters.push(`Search: "${searchVal}"`);
+  }
+  if (statusVal) {
+    const statusLabels = {
+      open: 'Open',
+      converted: 'Converted to Task'
+    };
+    filters.push(`Status: ${statusLabels[statusVal]}`);
+  }
+  if (reportedByVal) {
+    const user = usersCache.find(u => u.email === reportedByVal);
+    filters.push(`Reported By: ${user?.name || reportedByVal}`);
+  }
+  if (dateVal) {
+    filters.push(`Date: ${dateVal}`);
+  }
+  
+  return filters.length > 0 ? filters.join(' | ') : null;
+}
+
+// Add issues report header (only first page)
+function addIssuesReportFirstPageHeader(doc, pageWidth, totalIssues, activeFiltersStr) {
+  const marginLeft = 15;
+  let yPos = 15;
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.text('Issues Report', pageWidth / 2, yPos, { align: 'center' });
+  yPos += 7;
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(107, 114, 128);
+  
+  const now = new Date();
+  const dateStr = now.toLocaleDateString();
+  const timeStr = now.toLocaleTimeString();
+  doc.text(`Generated On: ${dateStr} ${timeStr}`, pageWidth / 2, yPos, { align: 'center' });
+  yPos += 5;
+  
+  doc.text(`Total Issues: ${totalIssues}`, pageWidth / 2, yPos, { align: 'center' });
+  yPos += 5;
+  
+  if (activeFiltersStr) {
+    doc.text(`Filters: ${activeFiltersStr}`, pageWidth / 2, yPos, { align: 'center' });
+    yPos += 5;
+  }
+  
+  doc.setDrawColor(229, 231, 235);
+  doc.setLineWidth(0.5);
+  doc.line(marginLeft, yPos, pageWidth - marginLeft, yPos);
+  doc.setTextColor(0, 0, 0);
+  
+  return yPos + 8; // Return starting Y for content
+}
+
+// Estimate height required for an issue
+function estimateIssueHeight(doc, issue, marginLeft, marginRight, pageWidth) {
+  const contentWidth = pageWidth - marginLeft - marginRight;
+  let height = 0;
+  
+  // Heading
+  height += 8; // Heading height + 4-5mm spacing
+  
+  // Info table (estimate 3 rows x 8mm each)
+  height += 24;
+  
+  // Description
+  if (issue.description) {
+    height += 8; // Label
+    height += doc.splitTextToSize(issue.description, contentWidth).length * 5; // Lines
+  }
+  
+  // Suggested Mitigation
+  if (issue.mitigation) {
+    height += 8; // Label
+    height += doc.splitTextToSize(issue.mitigation, contentWidth).length * 5; // Lines
+  }
+  
+  // Remarks
+  if (issue.remarks) {
+    height += 8; // Label
+    height += doc.splitTextToSize(issue.remarks, contentWidth).length * 5; // Lines
+  }
+  
+  // Spacing after issue
+  height += 8;
+  
+  return height;
+}
+
+// Render single issue in clean professional layout
+function renderIssueInPdf(doc, issue, yPos, marginLeft, marginRight, pageWidth, pageHeight, checkPageBreakFn) {
+  const contentWidth = pageWidth - marginLeft - marginRight;
+  let currentY = yPos;
+  
+  // Heading: Issue ID
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.text(`Issue ID: ${issue.id}`, marginLeft, currentY);
+  currentY += 8; // 4-5mm spacing below heading
+  
+  // Issue Information Table (4-column AutoTable)
+  const reporter = usersCache.find(u => u.email === issue.reportedBy);
+  const tableData = [
+    ['Status', issue.status === 'open' ? 'Open' : 'Converted to Task', 'Reported By', reporter?.name || issue.reportedBy],
+    ['Date', issue.reportedDate || 'N/A', 'Obtained From', issue.obtainedFrom || 'N/A']
+  ];
+  
+  const labelColumnWidth = 35;
+  const valueColumnWidth = (contentWidth - labelColumnWidth * 2) / 2;
+  
+  // @ts-ignore
+  doc.autoTable({
+    startY: currentY,
+    margin: { left: marginLeft, right: marginRight },
+    body: tableData,
+    theme: 'grid',
+    showHead: false,
+    tableWidth: contentWidth,
+    lineWidth: 0.2,
+    styles: {
+      fontSize: 10,
+      cellPadding: 3,
+      valign: 'middle',
+      overflow: 'linebreak',
+      lineColor: [200, 200, 200]
+    },
+    columnStyles: {
+      0: { fontStyle: 'bold', cellWidth: labelColumnWidth },
+      1: { cellWidth: valueColumnWidth },
+      2: { fontStyle: 'bold', cellWidth: labelColumnWidth },
+      3: { cellWidth: valueColumnWidth }
+    }
+  });
+  
+  // @ts-ignore
+  currentY = doc.lastAutoTable.finalY + 4;
+  
+  // Issue Description
+  if (issue.description) {
+    checkPageBreakFn(15);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text('Issue Description', marginLeft, currentY);
+    currentY += 6;
+    doc.setFont('helvetica', 'normal');
+    const descLines = doc.splitTextToSize(issue.description, contentWidth);
+    descLines.forEach(line => {
+      checkPageBreakFn(6);
+      doc.text(line, marginLeft, currentY);
+      currentY += 5;
+    });
+    currentY += 2;
+  }
+  
+  // Suggested Mitigation
+  if (issue.mitigation) {
+    checkPageBreakFn(15);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text('Suggested Mitigation', marginLeft, currentY);
+    currentY += 6;
+    doc.setFont('helvetica', 'normal');
+    const mitigationLines = doc.splitTextToSize(issue.mitigation, contentWidth);
+    mitigationLines.forEach(line => {
+      checkPageBreakFn(6);
+      doc.text(line, marginLeft, currentY);
+      currentY += 5;
+    });
+    currentY += 2;
+  }
+  
+  // Remarks
+  if (issue.remarks) {
+    checkPageBreakFn(15);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text('Remarks', marginLeft, currentY);
+    currentY += 6;
+    doc.setFont('helvetica', 'normal');
+    const remarksLines = doc.splitTextToSize(issue.remarks, contentWidth);
+    remarksLines.forEach(line => {
+      checkPageBreakFn(6);
+      doc.text(line, marginLeft, currentY);
+      currentY += 5;
+    });
+    currentY += 2;
+  }
+  
+  // Consistent spacing between issues (6-8 mm)
+  return currentY + 8;
+}
+
+// Bulk export filtered issues to PDF
+function exportFilteredIssuesToPdf() {
+  const issues = getFilteredIssuesForExport();
+  
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+  
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const marginLeft = 15;
+  const marginRight = 15;
+  const marginTop = 15;
+  const marginBottom = 20;
+  
+  const activeFiltersStr = getActiveIssueFiltersString();
+  const now = new Date();
+  const exportTimestamp = `${now.toLocaleDateString()} ${now.toLocaleTimeString()}`;
+  
+  // Helper to check page break and reset Y
+  let currentY;
+  const checkPageBreak = (needed) => {
+    if (currentY + needed > pageHeight - marginBottom) {
+      doc.addPage();
+      currentY = marginTop; // Reset to top margin on new pages (no header)
+    }
+  };
+  
+  if (issues.length === 0) {
+    // Empty state
+    currentY = addIssuesReportFirstPageHeader(doc, pageWidth, 0, activeFiltersStr);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(107, 114, 128);
+    doc.text('No issues available for export.', pageWidth / 2, currentY + 50, { align: 'center' });
+  } else {
+    // Initial header ONLY ON FIRST PAGE
+    currentY = addIssuesReportFirstPageHeader(doc, pageWidth, issues.length, activeFiltersStr);
+    
+    issues.forEach((issue) => {
+      // Check if entire issue fits on current page
+      const estimatedHeight = estimateIssueHeight(doc, issue, marginLeft, marginRight, pageWidth);
+      checkPageBreak(estimatedHeight);
+      
+      currentY = renderIssueInPdf(doc, issue, currentY, marginLeft, marginRight, pageWidth, pageHeight, checkPageBreak);
+    });
+  }
+  
+  // Add page numbers and footer to all pages
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(107, 114, 128);
+    
+    // Page X of Y
+    doc.text(`Page ${i} of ${totalPages}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
+    // Generated by and export timestamp on left and right
+    doc.text('Generated by Task Manager', marginLeft, pageHeight - 10);
+    doc.text(`Exported: ${exportTimestamp}`, pageWidth - marginRight, pageHeight - 10, { align: 'right' });
+  }
+  
+  // Save
+  const timestamp = now.getFullYear() +
+    String(now.getMonth() + 1).padStart(2, '0') +
+    String(now.getDate()).padStart(2, '0') +
+    String(now.getHours()).padStart(2, '0') +
+    String(now.getMinutes()).padStart(2, '0') +
+    String(now.getSeconds()).padStart(2, '0');
+  const filename = `Issues_Report_${timestamp}.pdf`;
+  doc.save(filename);
+}
+
+// ------------------------------
+// Notes Export Functions
+// ------------------------------
+
+// Get filtered notes for export (reusing loadNotes filtering logic
+function getFilteredNotesForExport() {
+  // Filter visible notes first
+  const visibleNotes = notesCache.filter(note => 
+    note.visibility === 'public' || note.createdBy === currentUser.email
+  );
+  
+  // Apply search and filters
+  let filtered = [...visibleNotes];
+  const search = document.getElementById('noteSearch')?.value?.toLowerCase() || '';
+  if (search) {
+    filtered = filtered.filter(note => 
+      note.name.toLowerCase().includes(search) || 
+      (note.description && note.description.toLowerCase().includes(search))
+    );
+  }
+  
+  const visibilityFilter = document.getElementById('noteVisibilityFilter')?.value || '';
+  if (visibilityFilter) {
+    filtered = filtered.filter(note => note.visibility === visibilityFilter);
+  }
+  
+  const createdByFilter = document.getElementById('noteCreatedByFilter')?.value || '';
+  if (createdByFilter) {
+    filtered = filtered.filter(note => note.createdBy === createdByFilter);
+  }
+  
+  return filtered;
+}
+
+// Get active note filters as string for PDF header
+function getActiveNoteFiltersString() {
+  const filters = [];
+  const searchVal = document.getElementById('noteSearch')?.value?.trim();
+  const visibilityVal = document.getElementById('noteVisibilityFilter')?.value;
+  const createdByVal = document.getElementById('noteCreatedByFilter')?.value;
+  
+  if (searchVal) {
+    filters.push(`Search: "${searchVal}"`);
+  }
+  
+  if (visibilityVal) {
+    filters.push(`Visibility: ${visibilityVal}`);
+  }
+  
+  if (createdByVal) {
+    const user = usersCache.find(u => u.email === createdByVal);
+    filters.push(`Created By: ${user?.name || createdByVal}`);
+  }
+  
+  return filters.length > 0 ? filters.join(' | ') : null;
+}
+
+// Add Notes report header to PDF page
+function addNotesReportHeader(doc, pageWidth, totalNotes, activeFiltersStr, isIndividual = false) {
+  const marginLeft = 15;
+  let yPos = 15;
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.text(isIndividual ? 'Note Report' : 'Notes Report', pageWidth / 2, yPos, { align: 'center' });
+  yPos += 7;
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(107, 114, 128);
+  
+  const now = new Date();
+  const dateStr = now.toLocaleDateString();
+  const timeStr = now.toLocaleTimeString();
+  doc.text(`Exported On: ${dateStr} ${timeStr}`, pageWidth / 2, yPos, { align: 'center' });
+  yPos += 5;
+  
+  if (!isIndividual && totalNotes !== undefined) {
+    doc.text(`Total Notes: ${totalNotes}`, pageWidth / 2, yPos, { align: 'center' });
+    yPos += 5;
+  }
+  
+  if (!isIndividual && activeFiltersStr) {
+    doc.text(`Filters: ${activeFiltersStr}`, pageWidth / 2, yPos, { align: 'center' });
+    yPos += 5;
+  }
+  
+  if (!isIndividual) {
+    doc.setDrawColor(229, 231, 235);
+    doc.setLineWidth(0.5);
+    doc.line(marginLeft, yPos, pageWidth - marginLeft, yPos);
+  }
+  doc.setTextColor(0, 0, 0);
+  
+  return yPos + 8; // Return starting Y for content
+}
+
+// Estimate height required for a note
+function estimateNoteHeight(doc, note, marginLeft, marginRight, pageWidth) {
+  const contentWidth = pageWidth - marginLeft - marginRight;
+  let height = 0;
+  
+  // Note Name heading
+  height += 10; // Heading + spacing
+  
+  // Description label + content
+  height += 8; // Label
+  if (note.description) {
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = note.description;
+    const plainText = tempDiv.textContent || tempDiv.innerText || '';
+    const lines = doc.splitTextToSize(plainText, contentWidth);
+    height += lines.length * 5 + 4;
+  }
+  
+  // Created Date
+  height += 8;
+  
+  // Spacing after note
+  height += 8;
+  
+  return height;
+}
+
+// Convert HTML description to plain text (preserving line breaks, lists, etc.
+function htmlToPlainText(html) {
+  if (!html) return '';
+  
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html;
+  
+  // Process lists first so we can handle them
+  let result = '';
+  
+  function traverse(node) {
+    node.childNodes.forEach(child => {
+      if (child.nodeType === Node.TEXT_NODE) {
+        result += child.textContent;
+      } else if (child.nodeName === 'BR') {
+        result += '\n';
+      } else if (child.nodeName === 'P' || child.nodeName === 'DIV') {
+        traverse(child);
+        result += '\n';
+      } else if (child.nodeName === 'LI') {
+        result += '• ';
+        traverse(child);
+        result += '\n';
+      } else if (child.nodeName === 'OL') {
+        let i = 1;
+        child.childNodes.forEach(li => {
+          if (li.nodeName === 'LI') {
+            result += `${i}. `;
+            traverse(li);
+            result += '\n';
+            i++;
+          }
+        });
+      } else {
+        traverse(child);
+      }
+    });
+  }
+  
+  traverse(tempDiv);
+  
+  // Clean up
+  return result.replace(/\n\n\n+/g, '\n\n').trim();
+}
+
+// Render single note in PDF
+function renderNoteInPdf(doc, note, yPos, marginLeft, marginRight, pageWidth, pageHeight, checkPageBreakFn) {
+  const contentWidth = pageWidth - marginLeft - marginRight;
+  let currentY = yPos;
+  
+  // Note Name heading
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.text(note.name, marginLeft, currentY);
+  currentY += 10;
+  
+  // Description
+  checkPageBreakFn(15);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text('Description', marginLeft, currentY);
+  currentY += 6;
+  
+  doc.setFont('helvetica', 'normal');
+  if (note.description) {
+    const plainText = htmlToPlainText(note.description);
+    const descLines = doc.splitTextToSize(plainText, contentWidth);
+    descLines.forEach(line => {
+      checkPageBreakFn(6);
+      doc.text(line, marginLeft, currentY);
+      currentY += 5;
+    });
+  } else {
+    doc.text('No description', marginLeft, currentY);
+    currentY +=5;
+  }
+  currentY +=3;
+  
+  // Created Date
+  checkPageBreakFn(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text('Created Date', marginLeft, currentY);
+  currentY +=6;
+  doc.setFont('helvetica', 'normal');
+  doc.text(`${note.createdDate} ${note.createdTime || ''}`, marginLeft, currentY);
+  currentY +=8;
+  
+  return currentY;
+}
+
+
+
+// Bulk export filtered notes to PDF
+function exportFilteredNotesToPdf() {
+  const notes = getFilteredNotesForExport();
+  
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+  
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const marginLeft = 15;
+  const marginRight = 15;
+  const marginTop = 15;
+  const marginBottom = 20;
+  
+  const activeFiltersStr = getActiveNoteFiltersString();
+  const now = new Date();
+  const exportTimestamp = `${now.toLocaleDateString()} ${now.toLocaleTimeString()}`;
+  
+  let currentY;
+  const checkPageBreak = (needed) => {
+    if (currentY + needed > pageHeight - marginBottom) {
+      doc.addPage();
+      currentY = marginTop;
+    }
+  };
+  
+  if (notes.length === 0) {
+    currentY = addNotesReportHeader(doc, pageWidth, 0, activeFiltersStr);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(107, 114, 128);
+    doc.text('No notes available for export.', pageWidth / 2, currentY + 50, { align: 'center' });
+  } else {
+    currentY = addNotesReportHeader(doc, pageWidth, notes.length, activeFiltersStr);
+    
+    notes.forEach(note => {
+      const estimatedHeight = estimateNoteHeight(doc, note, marginLeft, marginRight, pageWidth);
+      checkPageBreak(estimatedHeight);
+      
+      currentY = renderNoteInPdf(doc, note, currentY, marginLeft, marginRight, pageWidth, pageHeight, checkPageBreak);
+    });
+  }
+  
+  // Add page numbers and footer to all pages
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(107, 114, 128);
+    
+    doc.text(`Page ${i} of ${totalPages}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
+    doc.text('Generated by Task Manager', marginLeft, pageHeight - 10);
+    doc.text(`Exported: ${exportTimestamp}`, pageWidth - marginRight, pageHeight - 10, { align: 'right' });
+  }
+  
+  const filename = `Notes_Report_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}.pdf`;
+  doc.save(filename);
 }
 
 function openViewPunchListModal(punchListId) {
@@ -3151,26 +4886,85 @@ function exportNoteToPdf() {
   const hours = String(now.getHours()).padStart(2, '0');
   const minutes = String(now.getMinutes()).padStart(2, '0');
   const seconds = String(now.getSeconds()).padStart(2, '0');
-  const filename = `${noteName}_${year}${month}${day}${hours}${minutes}${seconds}.pdf`;
+  const filename = `${noteName.replace(/[^a-z0-9]/gi, '_')}_${year}${month}${day}${hours}${minutes}${seconds}.pdf`;
   
-  const element = document.createElement('div');
-  element.style.padding = '2rem';
-  element.innerHTML = `
-    <h1 style="font-family: Arial, sans-serif; color: #1e293b; margin-bottom: 1rem;">${noteName}</h1>
-    <div style="font-family: Arial, sans-serif;">
+  const pdfContainer = document.createElement('div');
+  pdfContainer.id = 'pdf-content';
+  pdfContainer.style.position = 'absolute';
+  pdfContainer.style.left = '-9999px';
+  pdfContainer.style.top = '0';
+  pdfContainer.style.width = '210mm'; // A4 width
+  pdfContainer.style.padding = '20mm';
+  pdfContainer.style.backgroundColor = 'white';
+  pdfContainer.style.fontFamily = '"Segoe UI", Arial, sans-serif';
+  document.body.appendChild(pdfContainer);
+  
+  pdfContainer.innerHTML = `
+    <style>
+      @page { size: A4; margin: 0; }
+      body { margin: 0; }
+      .pdf-header {
+        padding-bottom: 16px;
+        border-bottom: 2px solid #e5e7eb;
+        margin-bottom: 24px;
+      }
+      .pdf-header h1 {
+        color: #111827;
+        font-size: 24px;
+        margin: 0 0 8px 0;
+      }
+      .pdf-content {
+        color: #374151;
+        line-height: 1.6;
+      }
+      .pdf-content * {
+        box-sizing: border-box;
+      }
+      .pdf-footer {
+        margin-top: 40px;
+        padding-top: 16px;
+        border-top: 1px solid #e5e7eb;
+        color: #9ca3af;
+        font-size: 12px;
+        text-align: center;
+      }
+    </style>
+    <div class="pdf-header">
+      <h1>${noteName}</h1>
+    </div>
+    <div class="pdf-content">
       ${content.innerHTML}
+    </div>
+    <div class="pdf-footer">
+      Exported on ${now.toLocaleDateString()} at ${now.toLocaleTimeString()}
     </div>
   `;
   
   const opt = {
-    margin: 0.5,
+    margin: [0, 0, 0, 0],
     filename: filename,
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true },
-    jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+    image: { type: 'jpeg', quality: 1 },
+    html2canvas: {
+      scale: 2,
+      useCORS: true,
+      letterRendering: true,
+      logging: false
+    },
+    jsPDF: {
+      unit: 'mm',
+      format: 'a4',
+      orientation: 'portrait'
+    },
+    pagebreak: { mode: ['avoid-all', 'css'] }
   };
   
-  html2pdf().set(opt).from(element).save(filename);
+  html2pdf()
+    .set(opt)
+    .from(pdfContainer)
+    .save()
+    .then(() => {
+      document.body.removeChild(pdfContainer);
+    });
 }
 
 function loadNotes() {
@@ -3250,6 +5044,55 @@ function renderNotes(notes) {
   }).join('');
 }
 
+// Helper function to export a single note by ID
+window.exportSingleNote = function(noteId) {
+  const note = notesCache.find(n => n.id === noteId);
+  if (!note) return;
+  
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+  
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const marginLeft = 15;
+  const marginRight = 15;
+  const marginTop = 15;
+  const marginBottom = 20;
+  const now = new Date();
+  const exportTimestamp = `${now.toLocaleDateString()} ${now.toLocaleTimeString()}`;
+  
+  let currentY;
+  const checkPageBreak = (needed) => {
+    if (currentY + needed > pageHeight - marginBottom) {
+      doc.addPage();
+      currentY = marginTop;
+    }
+  };
+  
+  currentY = addNotesReportHeader(doc, pageWidth, undefined, null, true);
+  currentY = renderNoteInPdf(doc, note, currentY, marginLeft, marginRight, pageWidth, pageHeight, checkPageBreak);
+  
+  // Add page numbers and footer to all pages
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(107, 114, 128);
+    
+    doc.text(`Page ${i} of ${totalPages}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
+    doc.text('Generated by Task Manager', marginLeft, pageHeight - 10);
+    doc.text(`Exported: ${exportTimestamp}`, pageWidth - marginRight, pageHeight - 10, { align: 'right' });
+  }
+  
+  const filename = `${(note.name || 'note').replace(/[^a-z0-9]/gi, '_')}_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}.pdf`;
+  doc.save(filename);
+}
+
 window.openViewNoteModal = function(noteId) {
   const note = notesCache.find(n => n.id === noteId);
   if (!note) return;
@@ -3271,12 +5114,13 @@ window.openViewNoteModal = function(noteId) {
     <div style="border-top: 1px solid var(--gray-200); padding-top: 1rem;">
       ${note.description || '<p style="color: #9ca3af;">No description</p>'}
     </div>
-    ${note.createdBy === currentUser.email ? `
-      <div style="margin-top: 1.5rem; display: flex; gap: 0.5rem;">
+    <div style="margin-top: 1.5rem; display: flex; gap: 0.5rem;">
+      <button class="btn secondary-btn" onclick="exportSingleNote('${noteId}');">Export to PDF</button>
+      ${note.createdBy === currentUser.email ? `
         <button class="btn secondary-btn" onclick="openNoteModal('${note.id}'); document.getElementById('viewNoteModal').classList.add('hidden');">Edit</button>
         <button class="btn secondary-btn" style="background: var(--danger-100); color: var(--danger-600);" onclick="deleteNote('${note.id}'); document.getElementById('viewNoteModal').classList.add('hidden');">Delete</button>
-      </div>
-    ` : ''}
+      ` : ''}
+    </div>
   `;
   
   document.getElementById('viewNoteModal').classList.remove('hidden');
