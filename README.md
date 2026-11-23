@@ -24,6 +24,41 @@ A modern, professional task management web application built with Firebase Fires
 - **Convert to Task**: Admin can convert issues to tasks with one click (auto-fills description with issue details)
 - **Issue Status Tracking**: Track issues as Open or Converted
 
+### Curriculum Vitae (CV) Builder
+- **New CV Menu**: Create, manage, and edit multi-page professional CVs within your group workspace
+- **Visibility Control**: Set visibility to **Private** (creator only) or **Public** (group members) conforming to app rules
+- **Multiple Formats & Templates**: Choose from 4 distinct aesthetics:
+  - *Modern Professional*: Sleek typography, primary accents, colored headers, skill badge pills
+  - *Classic Academic & Traditional*: Refined serif styling, formal rules, publication citations
+  - *Two-Column Minimalist*: Structured dual-column layout separating skills/contact from experience
+  - *Clean and Executive*: High-contrast, clean bullet structure optimized for scanning
+- **12 Comprehensive Sections**:
+  - Personal Information
+  - Professional Summary
+  - Work Experience (with multiple responsibility bullet points and easy reordering)
+  - Education (degree, institution, location, duration, grade, remarks)
+  - Technical Skills (categorized, custom categories, individual skill management)
+  - Certifications and Training
+  - Research and Publications
+  - Scholarships and Awards
+  - Projects (with multiple highlights)
+  - Professional Memberships
+  - Languages (with proficiency scale)
+  - References ("Available upon request" or full contact cards)
+- **Reorder & Hide Sections**: Move sections up/down and toggle visibility of any section with one click
+- **Storage & File I/O**:
+  - Save in App (Firestore group collection with local fallback)
+  - Save as `*.cv` format (portable JSON)
+  - Load from `*.cv` file
+  - Export to crisp, multi-page **A4 PDF**
+  - Export to **MS Word** (`.doc`) with native styling and clean tables
+- **Interactive Live Preview**:
+  - True A4 proportions (210mm x 297mm)
+  - Instant reactive updates on every keystroke
+  - Zoom controls (50%, 75%, 100%, 125%, Fit Width)
+  - Page break management (prevents orphan headers and broken bullet points)
+  - Dedicated Print Preview
+
 ### Dashboard & Search
 - **Comprehensive Dashboard**: Shows statistics for tasks and issues
 - **Powerful Search/Filter**: 

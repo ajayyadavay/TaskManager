@@ -165,6 +165,12 @@ function setupEventListeners() {
       if (section === 'deadlines') {
         loadDeadlineTasks();
       }
+
+      if (section === 'cv') {
+        if (typeof window.loadCVs === 'function') {
+          window.loadCVs();
+        }
+      }
     });
   });
 
@@ -1020,6 +1026,23 @@ function setupRealtimeListeners() {
       loadNotes();
       populateNoteCreatedByFilter();
     });
+
+  // Listen for CVs changes
+  if (db && currentGroup) {
+    db.collection('groups').doc(currentGroup).collection('cvs')
+      .orderBy('updatedAt', 'desc')
+      .onSnapshot(snapshot => {
+        window.cvsCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        if (typeof window.loadCVs === 'function') {
+          window.loadCVs();
+        }
+      }, err => {
+        console.warn('Realtime CV listener note:', err);
+        if (typeof window.loadCVs === 'function') {
+          window.loadCVs();
+        }
+      });
+  }
   
   // Listen for notifications for the current user
   if (unsubscribeNotifications) unsubscribeNotifications();
@@ -1368,6 +1391,7 @@ async function handleLogout() {
   projectsCache = [];
   punchListsCache = [];
   notesCache = [];
+  window.cvsCache = [];
   showLogin();
 }
 

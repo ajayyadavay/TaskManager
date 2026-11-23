@@ -1,71 +1,73 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Task Manager - Group Collaboration</title>
   <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet"
-href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="cv.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 </head>
+
 <body>
   <div id="app">
-   <!-- Login Page -->
-<!-- Login Page -->
-<div id="loginPage" class="page">
-  <div id="loginContainer">
+    <!-- Login Page -->
+    <!-- Login Page -->
+    <div id="loginPage" class="page">
+      <div id="loginContainer">
 
-    <div id="loginLogo">
-      <i class="fas fa-tasks"></i>
+        <div id="loginLogo">
+          <i class="fas fa-tasks"></i>
+        </div>
+
+        <h1 id="loginTitle">Task Manager</h1>
+
+        <p id="loginSubtitle">
+          Transform project chaos into organized execution. Collaborate with teams,
+          assign tasks, manage punch lists, track issues, and monitor progress from a
+          single workspace. Deliver projects faster with complete visibility,
+          accountability, and control.
+        </p>
+
+        <div id="featureHighlights">
+
+          <div id="featureTeamCollaboration">
+            <i class="fas fa-users"></i>
+            <span>Team Collaboration</span>
+          </div>
+
+          <div id="featurePunchLists">
+            <i class="fas fa-list-check"></i>
+            <span>Punch Lists</span>
+          </div>
+
+          <div id="featureTaskManagement">
+            <i class="fas fa-tasks"></i>
+            <span>Task Management</span>
+          </div>
+
+          <div id="featureIssueTracking">
+            <i class="fas fa-triangle-exclamation"></i>
+            <span>Issue Tracking</span>
+          </div>
+
+        </div>
+
+        <button id="googleLoginBtn">
+          <i class="fab fa-google"></i>
+          Continue with Google
+        </button>
+
+        <p id="loginFooter">
+          Trusted workspace for project teams and organizations.
+        </p>
+
+      </div>
     </div>
-
-    <h1 id="loginTitle">Task Manager</h1>
-
-    <p id="loginSubtitle">
-      Transform project chaos into organized execution. Collaborate with teams,
-      assign tasks, manage punch lists, track issues, and monitor progress from a
-      single workspace. Deliver projects faster with complete visibility,
-      accountability, and control.
-    </p>
-
-    <div id="featureHighlights">
-
-      <div id="featureTeamCollaboration">
-        <i class="fas fa-users"></i>
-        <span>Team Collaboration</span>
-      </div>
-
-      <div id="featurePunchLists">
-        <i class="fas fa-list-check"></i>
-        <span>Punch Lists</span>
-      </div>
-
-      <div id="featureTaskManagement">
-        <i class="fas fa-tasks"></i>
-        <span>Task Management</span>
-      </div>
-
-      <div id="featureIssueTracking">
-        <i class="fas fa-triangle-exclamation"></i>
-        <span>Issue Tracking</span>
-      </div>
-
-    </div>
-
-    <button id="googleLoginBtn">
-      <i class="fab fa-google"></i>
-      Continue with Google
-    </button>
-
-    <p id="loginFooter">
-      Trusted workspace for project teams and organizations.
-    </p>
-
-  </div>
-</div>
 
     <!-- Group Selection Page -->
     <div id="groupSelectionPage" class="page hidden">
@@ -99,7 +101,8 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
           <label for="adminPosition">Your Position</label>
           <input type="text" id="adminPosition" placeholder="Enter your position">
         </div>
-        <button id="createGroupBtn" class="btn primary-btn" style="width:100%; margin-bottom: 1rem;">Create Group</button>
+        <button id="createGroupBtn" class="btn primary-btn" style="width:100%; margin-bottom: 1rem;">Create
+          Group</button>
         <button id="backToGroupSelection" class="btn secondary-btn" style="width:100%;">Back to Groups</button>
       </div>
     </div>
@@ -137,6 +140,7 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
           </button>
           <button class="nav-item" data-section="punchLists">Punch Lists</button>
           <button class="nav-item" data-section="notes">Notes</button>
+          <button class="nav-item" data-section="cv">CV</button>
           <button id="adminNavUsers" class="nav-item hidden" data-section="users">Users</button>
           <button id="adminNavProject" class="nav-item hidden" data-section="projects">Project</button>
         </aside>
@@ -145,44 +149,35 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
           <!-- Dashboard Section -->
           <section id="dashboardSection" class="section">
             <h2>Dashboard</h2>
-            
+
             <!-- Tasks Metrics -->
-             <div class="dashboard-top-row">
-  <div class="dashboard-tasks-panel">
-    <h3>Task Overview</h3>
-    <div id="tasksMetricsGrid" class="metrics-grid"></div>
-  </div>
+            <div class="dashboard-top-row">
+              <div class="dashboard-tasks-panel">
+                <h3>Task Overview</h3>
+                <div id="tasksMetricsGrid" class="metrics-grid"></div>
+              </div>
 
-  <div class="dashboard-chart-panel">
-    <h3>Closed Tasks</h3>
+              <div class="dashboard-chart-panel">
+                <h3>Closed Tasks</h3>
 
-    <div class="donut-chart">
-      <svg width="260" height="260" viewBox="0 0 220 220">
-        <circle
-          class="donut-bg"
-          cx="110"
-          cy="110"
-          r="85">
-        </circle>
+                <div class="donut-chart">
+                  <svg width="260" height="260" viewBox="0 0 220 220">
+                    <circle class="donut-bg" cx="110" cy="110" r="85">
+                    </circle>
 
-        <circle
-          id="closedDonutCircle"
-          class="donut-progress"
-          cx="110"
-          cy="110"
-          r="85">
-        </circle>
-      </svg>
+                    <circle id="closedDonutCircle" class="donut-progress" cx="110" cy="110" r="85">
+                    </circle>
+                  </svg>
 
-      <div class="donut-center">
-        <div id="closedPercent" class="donut-percent">0%</div>
-        <div class="donut-label">Closed</div>
-        <div id="closedRatio" class="donut-ratio">0 / 0 Tasks</div>
-      </div>
-    </div>
-  </div>
-</div>
-            
+                  <div class="donut-center">
+                    <div id="closedPercent" class="donut-percent">0%</div>
+                    <div class="donut-label">Closed</div>
+                    <div id="closedRatio" class="donut-ratio">0 / 0 Tasks</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- Issues Metrics -->
             <div class="dashboard-section">
               <h3>Issues</h3>
@@ -202,9 +197,9 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
               </div>
             </div>
             <div class="search-filter-bar">
-              
+
               <div class="filter-row">
-			          
+
                 <select id="taskStatusFilter">
                   <option value="">All Status</option>
                   <option value="pending">Pending</option>
@@ -236,7 +231,8 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
                 <input type="date" id="taskDateFilter" placeholder="Assigned Date">
                 <input type="date" id="taskDeadlineFilter" placeholder="Deadline Date">
                 <input type="number" class="search-input" id="taskRemainingDaysFilter" placeholder="Remaining Days">
-                <input type="text" class="search-input" id="taskSearch" placeholder="Search tasks by ID, description...">
+                <input type="text" class="search-input" id="taskSearch"
+                  placeholder="Search tasks by ID, description...">
               </div>
             </div>
             <div class="active-filters-container">
@@ -262,25 +258,21 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
             </div>
             <div class="deadline-filter-panel">
 
-  <div class="deadline-operator-group">
-    <button class="deadline-op-btn active" data-op="=">=</button>
-    <button class="deadline-op-btn" data-op="<">&lt;</button>
-    <button class="deadline-op-btn" data-op="<=">&le;</button>
-    <button class="deadline-op-btn" data-op=">">&gt;</button>
-    <button class="deadline-op-btn" data-op=">=">&ge;</button>
+              <div class="deadline-operator-group">
+                <button class="deadline-op-btn active" data-op="=">=</button>
+                <button class="deadline-op-btn" data-op="<">&lt;</button>
+                <button class="deadline-op-btn" data-op="<=">&le;</button>
+                <button class="deadline-op-btn" data-op=">">&gt;</button>
+                <button class="deadline-op-btn" data-op=">=">&ge;</button>
 
-    <div class="input-group">
-    <input
-      type="number"
-      id="deadlineDaysFilter"
-      value="0"
-      placeholder="Enter days">
-      <label for="deadlineDaysFilter">Days</label>
-  </div>
+                <div class="input-group">
+                  <input type="number" id="deadlineDaysFilter" value="0" placeholder="Enter days">
+                  <label for="deadlineDaysFilter">Days</label>
+                </div>
 
-  </div>
+              </div>
 
-  <!--
+              <!--
   <div class="input-group">
     <input
       type="number"
@@ -291,16 +283,14 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
   </div>
 -->
 
-  <p class="deadline-filter-help">
-    Examples:
-    = 3 → exactly 3 days,
-    <= 3 → within 3 days,
-    < 0 → overdue tasks
-  </p>
+              <p class="deadline-filter-help">
+                Examples:
+                = 3 → exactly 3 days,
+                <= 3 → within 3 days, < 0 → overdue tasks </p>
 
-  <p id="deadlineSummary" class="deadline-summary"></p>
+                  <p id="deadlineSummary" class="deadline-summary"></p>
 
-</div>
+            </div>
             <div id="deadlinesList" class="tasks-list"></div>
           </section>
 
@@ -316,9 +306,9 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
               </div>
             </div>
             <div class="search-filter-bar">
-              
+
               <div class="filter-row">
-			  <input type="text" class="search-input" id="issueSearch" placeholder="Search issues by description...">
+                <input type="text" class="search-input" id="issueSearch" placeholder="Search issues by description...">
                 <select id="issueStatusFilter">
                   <option value="">All Status</option>
                   <option value="open">Open</option>
@@ -350,20 +340,20 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
             </div>
             <div id="notificationsList" class="notifications-list"></div>
           </section>
-          
+
           <!-- Users Section (Admin Only) -->
           <section id="usersSection" class="section hidden">
             <div class="section-header">
               <h2>Users</h2>
               <button id="inviteUserBtn" class="btn primary-btn">Invite User</button>
             </div>
-            
+
             <!-- Admin Users -->
             <div class="user-management-section">
               <h3>Admins</h3>
               <div id="adminsList" class="users-grid"></div>
             </div>
-            
+
             <!-- Invited Users -->
             <div class="user-management-section">
               <h3>Team Members</h3>
@@ -373,9 +363,9 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
 
           <!-- Punch Lists Section -->
           <section id="punchListsSection" class="section hidden">
-             <!-- Stats Cards -->
+            <!-- Stats Cards -->
             <div id="punchListsMetricsGrid" class="pl-metrics-grid" style="margin-bottom: 1.5rem;"></div>
-            
+
             <div class="section-header">
               <h2>Punch Lists</h2>
               <div style="display: flex; gap: 0.5rem;">
@@ -385,40 +375,41 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
                 <button id="createPunchListBtn" class="btn primary-btn">+ New Punch List</button>
               </div>
             </div>
-            
+
             <!-- Filter Section -->
             <div class="search-filter-bar">
               <div class="filter-row">
-                
+
                 <!--<div style="display: flex; gap: 0.25rem; align-items: center;">-->
-                  
-                  <select id="punchListProgressOperator">
-                    <option value="any">Any Progress</option>
-                    <option value="lt">Less Than</option>
-                    <option value="lte">Less Than or Equal</option>
-                    <option value="eq">Equal To</option>
-                    <option value="gte">Greater Than or Equal</option>
-                    <option value="gt">Greater Than</option>
-                  </select>
-                  <input type="number" class="search-input" id="punchListProgressValue" min="0" max="100" placeholder="%">
+
+                <select id="punchListProgressOperator">
+                  <option value="any">Any Progress</option>
+                  <option value="lt">Less Than</option>
+                  <option value="lte">Less Than or Equal</option>
+                  <option value="eq">Equal To</option>
+                  <option value="gte">Greater Than or Equal</option>
+                  <option value="gt">Greater Than</option>
+                </select>
+                <input type="number" class="search-input" id="punchListProgressValue" min="0" max="100" placeholder="%">
                 <!--</div>-->
-                
+
                 <select id="punchListVisibilityFilter">
                   <option value="">All Visibility</option>
                   <option value="public">Public</option>
                   <option value="private">Private</option>
                 </select>
-                
+
                 <select id="punchListCreatedByFilter">
                   <option value="">All Creators</option>
                 </select>
-                
+
                 <input type="date" id="punchListCreatedDateFilter" placeholder="Created Date">
-                <input type="text" class="search-input" id="punchListSearch" placeholder="Search by name, description...">
+                <input type="text" class="search-input" id="punchListSearch"
+                  placeholder="Search by name, description...">
                 <!--<button id="clearPunchListFiltersBtn" class="btn secondary-btn small-btn">Clear Filters</button>-->
               </div>
             </div>
-            
+
             <!-- Active Filter Chips -->
             <div class="active-filters-container" id="punchListActiveFiltersContainer" style="margin-bottom: 1rem;">
               <div class="active-filters-header">
@@ -429,7 +420,7 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
                 <div class="no-active-filters">No active filters</div>
               </div>
             </div>
-            
+
             <!-- View Toggle -->
             <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem; gap: 0.5rem;">
               <button id="punchListCardViewBtn" class="btn secondary-btn small-btn active">
@@ -439,18 +430,21 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
                 <i class="fas fa-list"></i> List View
               </button>
             </div>
-            
+
             <!-- View Container -->
             <div id="punchListCardView" class="users-grid"></div>
             <div id="punchListListView" class="hidden" style="overflow-x: auto;">
-              <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+              <table
+                style="width: 100%; border-collapse: collapse; background: white; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                 <thead style="position: sticky; top: 0; background: white; z-index: 10;">
                   <tr>
                     <th style="padding: 1rem; text-align: left; border-bottom: 1px solid var(--gray-200);">ID</th>
                     <th style="padding: 1rem; text-align: left; border-bottom: 1px solid var(--gray-200);">Name</th>
-                    <th style="padding: 1rem; text-align: left; border-bottom: 1px solid var(--gray-200);">Visibility</th>
+                    <th style="padding: 1rem; text-align: left; border-bottom: 1px solid var(--gray-200);">Visibility
+                    </th>
                     <th style="padding: 1rem; text-align: left; border-bottom: 1px solid var(--gray-200);">Progress</th>
-                    <th style="padding: 1rem; text-align: left; border-bottom: 1px solid var(--gray-200);">Created By</th>
+                    <th style="padding: 1rem; text-align: left; border-bottom: 1px solid var(--gray-200);">Created By
+                    </th>
                     <th style="padding: 1rem; text-align: left; border-bottom: 1px solid var(--gray-200);">Date</th>
                     <th style="padding: 1rem; text-align: left; border-bottom: 1px solid var(--gray-200);">Actions</th>
                   </tr>
@@ -458,15 +452,15 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
                 <tbody id="punchListTableBody"></tbody>
               </table>
             </div>
-            
+
             <!-- Archived Section -->
             <div style="margin-top: 2rem;">
               <h3 style="margin-bottom: 1rem; color: var(--gray-600);">Archived Punch Lists</h3>
               <div id="archivedPunchListsList" class="users-grid"></div>
             </div>
-          
+
           </section>
-          
+
           <!-- Notes Section -->
           <section id="notesSection" class="section hidden">
             <div class="section-header">
@@ -480,7 +474,8 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
             </div>
             <div class="search-filter-bar">
               <div class="filter-row">
-                <input type="text" class="search-input" id="noteSearch" placeholder="Search notes by name, description...">
+                <input type="text" class="search-input" id="noteSearch"
+                  placeholder="Search notes by name, description...">
                 <select id="noteVisibilityFilter">
                   <option value="">All Visibility</option>
                   <option value="public">Public</option>
@@ -493,7 +488,156 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
             </div>
             <div id="notesList" class="users-grid"></div>
           </section>
-          
+
+          <!-- CV Section -->
+          <section id="cvSection" class="section hidden">
+            <!-- Sub-view 1: List View -->
+            <div id="cvListView" class="cv-view">
+              <div class="section-header">
+                <h2>Curriculum Vitae (CV)</h2>
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                  <button id="loadCvFileBtn" class="btn secondary-btn" onclick="window.triggerCvFileImport()">
+                    <i class="fas fa-file-arrow-up"></i> Load *.cv File
+                  </button>
+                  <input type="file" id="cvFileInput" accept=".cv,.json" style="display: none;">
+                  <button id="createNewCvBtn" class="btn primary-btn" onclick="window.createNewCvPrompt()">
+                    <i class="fas fa-plus"></i> + New CV
+                  </button>
+                </div>
+              </div>
+              <div class="search-filter-bar">
+                <div class="filter-row">
+                  <input type="text" class="search-input" id="cvSearch"
+                    placeholder="Search CVs by title, name, or role...">
+                  <select id="cvVisibilityFilter">
+                    <option value="">All Visibility</option>
+                    <option value="public">Public</option>
+                    <option value="private">Private</option>
+                  </select>
+                  <select id="cvTemplateFilter">
+                    <option value="">All Templates</option>
+                    <option value="modern">Modern Professional</option>
+                    <option value="classic">Classic Academic & Traditional</option>
+                    <option value="minimal">Two-Column Minimalist</option>
+                    <option value="ats">Clean and Executive</option>
+                  </select>
+                </div>
+              </div>
+              <div id="cvsList" class="users-grid"></div>
+            </div>
+
+            <!-- Sub-view 2: Full Workspace Editor & Live Preview -->
+            <div id="cvEditorWorkspace" class="cv-view hidden cv-workspace">
+              <!-- Top Controls & Action Bar -->
+              <div class="cv-top-bar">
+                <div class="cv-top-bar-left">
+                  <button class="btn secondary-btn small-btn" onclick="window.backToCvList()" title="Back to CV list">
+                    <i class="fas fa-arrow-left"></i> Back
+                  </button>
+                  <input type="text" id="cvDocTitle" class="cv-doc-title-input" placeholder="CV Document Title"
+                    title="Click to rename document">
+                </div>
+
+                <div class="cv-top-bar-controls">
+                  <div style="display: flex; align-items: center; gap: 0.35rem;">
+                    <label for="cvDocVisibility"
+                      style="font-size: 0.8rem; font-weight: 600; color: var(--gray-700);">Visibility:</label>
+                    <select id="cvDocVisibility"
+                      style="font-size: 0.85rem; padding: 0.35rem 0.6rem; border-radius: var(--radius-md); border: 1px solid var(--gray-300);">
+                      <option value="private">Private (Default)</option>
+                      <option value="public">Public</option>
+                    </select>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 0.35rem;">
+                    <label for="cvDocTemplate"
+                      style="font-size: 0.8rem; font-weight: 600; color: var(--gray-700);">Template:</label>
+                    <select id="cvDocTemplate"
+                      style="font-size: 0.85rem; padding: 0.35rem 0.6rem; border-radius: var(--radius-md); border: 1px solid var(--gray-300);">
+                      <option value="modern">Modern Professional</option>
+                      <option value="classic">Classic Academic & Traditional</option>
+                      <option value="minimal">Two-Column Minimalist</option>
+                      <option value="ats">Clean and Executive</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="cv-top-bar-actions">
+                  <button class="btn primary-btn small-btn" onclick="window.saveCurrentCvInApp()"
+                    title="Save CV in App">
+                    <i class="fas fa-save"></i> Save
+                  </button>
+                  <button class="btn secondary-btn small-btn" onclick="window.downloadCurrentCvAsFile()"
+                    title="Save as *.cv format">
+                    <i class="fas fa-download"></i> *.cv
+                  </button>
+                  <!--<button class="btn secondary-btn small-btn" onclick="window.exportCurrentCvPdf()" title="Export Crisp A4 PDF">
+                    <i class="fas fa-file-pdf"></i> PDF
+                  </button> -->
+                  <button class="btn secondary-btn small-btn" onclick="window.exportCurrentCvWord()"
+                    title="Export MS Word Document">
+                    <i class="fas fa-file-word"></i> Word
+                  </button>
+                  <button class="btn secondary-btn small-btn" onclick="window.triggerCvPrintPreview()"
+                    title="Open A4 Print Preview">
+                    <i class="fas fa-print"></i> Print
+                  </button>
+                </div>
+              </div>
+
+              <!-- Two-Column Split Workspace -->
+              <div class="cv-split-layout">
+                <!-- Left Column: Section Reordering & Interactive Editors -->
+                <div class="cv-editor-panel">
+                  <!-- Section Manager: Reorder & Hide/Show -->
+                  <div class="cv-section-manager">
+                    <div class="cv-section-manager-header">
+                      <div class="cv-section-manager-title">
+                        <i class="fas fa-layer-group" style="color: var(--primary-600);"></i>
+                        <span>Sections Order & Visibility</span>
+                      </div>
+                      <span style="font-size: 0.75rem; color: var(--gray-500);">Use arrows to reorder, eye to
+                        show/hide</span>
+                    </div>
+                    <div id="cvSectionChips" class="cv-section-chips"></div>
+                  </div>
+
+                  <!-- Dynamic Forms for All 12 Sections -->
+                  <div id="cvSectionFormsContainer"></div>
+                </div>
+
+                <!-- Right Column: Sticky Live A4 Preview -->
+                <div class="cv-preview-panel">
+                  <div class="cv-preview-toolbar">
+                    <div class="cv-preview-zoom-controls">
+                      <button class="cv-zoom-btn" onclick="window.cvZoomOut()" title="Zoom Out"><i
+                          class="fas fa-search-minus"></i></button>
+                      <span id="cvZoomPercent" class="cv-zoom-indicator">85%</span>
+                      <button class="cv-zoom-btn" onclick="window.cvZoomIn()" title="Zoom In"><i
+                          class="fas fa-search-plus"></i></button>
+                      <button class="cv-zoom-btn" onclick="window.cvZoomFit()" title="Fit to Panel Width">Fit</button>
+                      <button class="cv-zoom-btn" onclick="window.cvZoomReset()" title="100% Zoom">100%</button>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                      <span style="font-size: 0.75rem; color: var(--gray-500); font-weight: 500;">
+                        <i class="fas fa-bolt" style="color: #eab308;"></i> Live Preview
+                      </span>
+                      <button class="btn secondary-btn small-btn" onclick="window.triggerCvPrintPreview()">
+                        <i class="fas fa-print"></i> Print Preview
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="cv-preview-scroll-area">
+                    <div id="cvZoomWrapper" class="cv-preview-zoom-wrapper">
+                      <div id="cvLivePreviewArea"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <!-- Projects Section (Admin Only) -->
           <section id="projectsSection" class="section hidden">
             <div class="section-header">
@@ -503,7 +647,7 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
               <p><strong>Total Categories:</strong> <span id="totalCategoriesCount">0</span></p>
               <p><strong>Total Projects:</strong> <span id="totalProjectsCount">0</span></p>
             </div>
-            
+
             <!-- Project Categories -->
             <div class="user-management-section">
               <div class="section-header" style="margin-bottom: 1rem;">
@@ -512,7 +656,7 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
               </div>
               <div id="categoriesList" class="users-grid"></div>
             </div>
-            
+
             <!-- Project Names -->
             <div class="user-management-section">
               <div class="section-header" style="margin-bottom: 1rem;">
@@ -706,7 +850,8 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
         <hr style="border: none; border-top: 1px solid var(--gray-200); margin: 1.5rem 0;">
         <h4 style="margin-bottom: 1rem;">Checklist Items</h4>
         <div id="punchListItems" style="margin-bottom: 1rem;"></div>
-        <button type="button" id="addPunchListItemBtn" class="btn secondary-btn" style="width: 100%; margin-bottom: 1rem;">+ Add Item</button>
+        <button type="button" id="addPunchListItemBtn" class="btn secondary-btn"
+          style="width: 100%; margin-bottom: 1rem;">+ Add Item</button>
         <button type="submit" class="btn primary-btn" style="width: 100%;">Save Punch List</button>
       </form>
     </div>
@@ -734,7 +879,7 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
       <button id="confirmTransferAdminBtn" class="btn primary-btn" style="width: 100%;">Confirm Transfer</button>
     </div>
   </div>
-  
+
   <!-- Create/Edit Note Modal -->
   <div id="noteModal" class="modal hidden">
     <div class="modal-content extra-large-modal">
@@ -756,14 +901,22 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
         <!-- Text Editor Toolbar -->
         <div class="editor-toolbar">
           <button type="button" class="editor-btn" data-command="bold" title="Bold"><i class="fas fa-bold"></i></button>
-          <button type="button" class="editor-btn" data-command="italic" title="Italic"><i class="fas fa-italic"></i></button>
-          <button type="button" class="editor-btn" data-command="underline" title="Underline"><i class="fas fa-underline"></i></button>
-          <button type="button" class="editor-btn" data-command="strikeThrough" title="Strikethrough"><i class="fas fa-strikethrough"></i></button>
-          <button type="button" class="editor-btn" data-command="insertUnorderedList" title="Unordered List"><i class="fas fa-list-ul"></i></button>
-          <button type="button" class="editor-btn" data-command="insertOrderedList" title="Ordered List"><i class="fas fa-list-ol"></i></button>
-          <button type="button" class="editor-btn" data-command="justifyLeft" title="Align Left"><i class="fas fa-align-left"></i></button>
-          <button type="button" class="editor-btn" data-command="justifyCenter" title="Align Center"><i class="fas fa-align-center"></i></button>
-          <button type="button" class="editor-btn" data-command="justifyRight" title="Align Right"><i class="fas fa-align-right"></i></button>
+          <button type="button" class="editor-btn" data-command="italic" title="Italic"><i
+              class="fas fa-italic"></i></button>
+          <button type="button" class="editor-btn" data-command="underline" title="Underline"><i
+              class="fas fa-underline"></i></button>
+          <button type="button" class="editor-btn" data-command="strikeThrough" title="Strikethrough"><i
+              class="fas fa-strikethrough"></i></button>
+          <button type="button" class="editor-btn" data-command="insertUnorderedList" title="Unordered List"><i
+              class="fas fa-list-ul"></i></button>
+          <button type="button" class="editor-btn" data-command="insertOrderedList" title="Ordered List"><i
+              class="fas fa-list-ol"></i></button>
+          <button type="button" class="editor-btn" data-command="justifyLeft" title="Align Left"><i
+              class="fas fa-align-left"></i></button>
+          <button type="button" class="editor-btn" data-command="justifyCenter" title="Align Center"><i
+              class="fas fa-align-center"></i></button>
+          <button type="button" class="editor-btn" data-command="justifyRight" title="Align Right"><i
+              class="fas fa-align-right"></i></button>
           <input type="color" id="editorTextColor" class="color-picker" title="Text Color">
           <input type="color" id="editorBgColor" class="color-picker" title="Background Color">
           <select id="editorFontFamily" class="editor-select">
@@ -779,11 +932,13 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
             <option value="5">Large</option>
             <option value="7">Extra Large</option>
           </select>
-          <button type="button" class="editor-btn" data-command="removeFormat" title="Clear Formatting"><i class="fas fa-eraser"></i></button>
+          <button type="button" class="editor-btn" data-command="removeFormat" title="Clear Formatting"><i
+              class="fas fa-eraser"></i></button>
         </div>
         <div class="input-group">
           <label for="noteDescription">Description</label>
-          <div id="noteDescription" contenteditable="true" class="editor-content" placeholder="Enter note description..."></div>
+          <div id="noteDescription" contenteditable="true" class="editor-content"
+            placeholder="Enter note description..."></div>
         </div>
         <div style="display: flex; gap: 1rem;">
           <button type="submit" class="btn primary-btn" style="flex: 1;">Save Note</button>
@@ -791,7 +946,7 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
       </form>
     </div>
   </div>
-  
+
   <!-- View Note Modal -->
   <div id="viewNoteModal" class="modal hidden">
     <div class="modal-content extra-large-modal">
@@ -805,6 +960,8 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
   <!-- Keep html2pdf for notes export if needed -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="cv.js"></script>
   <script src="app.js"></script>
 </body>
+
 </html>
