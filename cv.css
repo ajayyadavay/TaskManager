@@ -180,14 +180,15 @@
 /* Two-column Split Workspace */
 .cv-split-layout {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* minmax(0, 1fr): the wide A4 sheet inside the preview must not stretch the column */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 1.5rem;
   align-items: start;
 }
 
 @media (max-width: 1200px) {
   .cv-split-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -515,10 +516,18 @@
   box-shadow: var(--shadow-sm);
 }
 
+.cv-editor-panel,
+.cv-preview-panel {
+  min-width: 0;
+}
+
 .cv-preview-toolbar {
   display: flex;
+  flex-wrap: wrap;            /* controls move to a second row instead of leaving the card */
   justify-content: space-between;
   align-items: center;
+  row-gap: 0.45rem;
+  min-width: 0;
   background: white;
   padding: 0.5rem 0.85rem;
   border-radius: var(--radius-md);
@@ -530,6 +539,28 @@
   display: flex;
   align-items: center;
   gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.cv-preview-toolbar-right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.cv-preview-toolbar-right .cv-print-preview-btn {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cv-preview-toolbar-right .cv-page-setup-badge {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cv-zoom-btn {
@@ -911,7 +942,8 @@
 
 .cv-template-minimal .cv-two-col-grid {
   display: grid;
-  grid-template-columns: 32% 68%;
+  /* minmax(0, …) keeps the columns + gap inside the page width (32% + 68% + gap used to overflow) */
+  grid-template-columns: minmax(0, 32%) minmax(0, 1fr);
   gap: 16px;
 }
 
@@ -1052,6 +1084,660 @@
 .cv-template-ats .cv-bullet-item {
   font-size: 8.5pt;
   margin-bottom: 2px;
+}
+
+/* ==========================================================================
+   Shared: Duration & Reference details
+   ========================================================================== */
+.cv-entry-duration {
+  display: block;
+  font-size: 7.5pt;
+  font-weight: 500;
+  font-style: normal;
+  opacity: 0.85;
+  text-align: right;
+}
+
+.cv-entry-reference {
+  font-size: 8.5pt;
+  color: #4b5563;
+  margin-top: 3px;
+  padding-left: 8px;
+  border-left: 2px solid #e5e7eb;
+}
+
+/* ==========================================================================
+   TEMPLATE 5: Elegant Teal & Gold
+   ========================================================================== */
+.cv-template-elegant {
+  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  color: #1f2a30;
+  line-height: 1.5;
+}
+
+.cv-template-elegant .cv-header {
+  background: linear-gradient(135deg, #0f4c5c 0%, #145e6f 100%);
+  color: #ffffff;
+  padding: 18px 22px 16px;
+  margin-bottom: 18px;
+  border-radius: 4px;
+  border-bottom: 4px solid #c9a227;
+}
+
+.cv-template-elegant .cv-name {
+  font-family: 'Georgia', 'Cambria', 'Times New Roman', serif;
+  font-size: 25pt;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: #ffffff;
+  margin: 0;
+  line-height: 1.1;
+}
+
+.cv-template-elegant .cv-headline {
+  font-size: 11pt;
+  font-weight: 500;
+  color: #e9d48a;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  margin-top: 6px;
+}
+
+.cv-template-elegant .cv-contact-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 10px;
+  font-size: 8.5pt;
+  color: #e6f0f2;
+}
+
+.cv-template-elegant .cv-contact-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.cv-template-elegant .cv-contact-item i {
+  color: #c9a227;
+}
+
+.cv-template-elegant .cv-sec-title {
+  font-family: 'Georgia', 'Cambria', serif;
+  font-size: 12pt;
+  font-weight: 600;
+  color: #0f4c5c;
+  letter-spacing: 0.6px;
+  margin-top: 16px;
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #d9e4e7;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+.cv-template-elegant .cv-sec-title i {
+  color: #c9a227;
+  font-size: 10pt;
+}
+
+.cv-template-elegant .cv-sec-title::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 48px;
+  height: 2px;
+  background: #c9a227;
+}
+
+.cv-template-elegant .cv-entry {
+  margin-bottom: 10px;
+}
+
+.cv-template-elegant .cv-entry-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 10pt;
+}
+
+.cv-template-elegant .cv-entry-header > div:first-child {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.cv-template-elegant .cv-entry-title {
+  font-weight: 700;
+  color: #12323b;
+}
+
+.cv-template-elegant .cv-entry-subtitle {
+  font-weight: 600;
+  color: #0f4c5c;
+}
+
+.cv-template-elegant .cv-entry-date {
+  font-size: 8.5pt;
+  font-weight: 600;
+  color: #9a7b16;
+  text-align: right;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cv-template-elegant .cv-entry-location {
+  font-size: 8.5pt;
+  color: #5b6b70;
+  font-style: italic;
+}
+
+.cv-template-elegant .cv-bullets {
+  margin: 4px 0 0 16px;
+  padding: 0;
+  list-style-type: disc;
+}
+
+.cv-template-elegant .cv-bullet-item {
+  font-size: 9pt;
+  color: #33454b;
+  margin-bottom: 3px;
+  line-height: 1.4;
+}
+
+.cv-template-elegant .cv-bullet-item::marker {
+  color: #c9a227;
+}
+
+.cv-template-elegant .cv-skill-badge {
+  display: inline-block;
+  background: #eef5f6;
+  color: #0f4c5c;
+  border: 1px solid #c7dde2;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 8.5pt;
+  font-weight: 500;
+  margin: 2px;
+}
+
+.cv-template-elegant .cv-entry-reference {
+  border-left-color: #c9a227;
+}
+
+.cv-template-elegant .cv-sheet-footer {
+  border-top-color: #c9a227;
+  color: #0f4c5c;
+}
+
+/* ==========================================================================
+   TEMPLATE 6: Navy Sidebar Executive (two-column)
+   ========================================================================== */
+.cv-template-sidebar {
+  font-family: 'Calibri', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  color: #1e293b;
+  line-height: 1.5;
+}
+
+.cv-template-sidebar .cv-header {
+  background: #1f3a5f;
+  color: #ffffff;
+  padding: 18px 22px;
+  margin-bottom: 16px;
+  border-radius: 4px;
+  position: relative;
+  border-left: 6px solid #5b8bd0;
+}
+
+.cv-template-sidebar .cv-name {
+  font-size: 24pt;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: #ffffff;
+  margin: 0;
+  line-height: 1.1;
+}
+
+.cv-template-sidebar .cv-headline {
+  font-size: 11pt;
+  font-weight: 500;
+  color: #bcd3f2;
+  margin-top: 5px;
+}
+
+.cv-template-sidebar .cv-contact-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 10px;
+  font-size: 8.5pt;
+  color: #e2e8f0;
+}
+
+.cv-template-sidebar .cv-contact-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.cv-template-sidebar .cv-contact-item i {
+  color: #8fb3e6;
+}
+
+.cv-template-sidebar .cv-two-col-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 31%) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.cv-template-sidebar .cv-left-col {
+  background: #f1f5fb;
+  border-radius: 4px;
+  padding: 4px 12px 10px;
+  border-top: 3px solid #1f3a5f;
+}
+
+.cv-template-sidebar .cv-right-col {
+  min-width: 0;
+}
+
+.cv-template-sidebar .cv-sec-title {
+  font-size: 10.5pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: #1f3a5f;
+  margin-top: 12px;
+  margin-bottom: 7px;
+  padding-bottom: 3px;
+  border-bottom: 2px solid #5b8bd0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.cv-template-sidebar .cv-sec-title i {
+  color: #5b8bd0;
+  font-size: 9.5pt;
+}
+
+.cv-template-sidebar .cv-left-col .cv-sec-title {
+  font-size: 9.5pt;
+  border-bottom-width: 1px;
+}
+
+.cv-template-sidebar .cv-entry {
+  margin-bottom: 9px;
+}
+
+.cv-template-sidebar .cv-entry-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 10pt;
+}
+
+.cv-template-sidebar .cv-entry-header > div:first-child {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.cv-template-sidebar .cv-left-col .cv-entry-header {
+  flex-direction: column;
+  gap: 0;
+  font-size: 9pt;
+}
+
+.cv-template-sidebar .cv-left-col .cv-entry,
+.cv-template-sidebar .cv-left-col .cv-entry > div {
+  display: block !important;
+}
+
+.cv-template-sidebar .cv-entry-title {
+  font-weight: 700;
+  color: #0f2541;
+}
+
+.cv-template-sidebar .cv-entry-subtitle {
+  font-weight: 600;
+  color: #3b5f8f;
+}
+
+.cv-template-sidebar .cv-entry-date {
+  font-size: 8.5pt;
+  font-weight: 600;
+  color: #3b5f8f;
+  text-align: right;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cv-template-sidebar .cv-left-col .cv-entry-date {
+  display: block;
+  margin-top: 1px;
+  text-align: left;
+  font-size: 8pt;
+}
+
+.cv-template-sidebar .cv-left-col .cv-entry-duration {
+  text-align: left;
+}
+
+.cv-template-sidebar .cv-entry-location {
+  font-size: 8.5pt;
+  color: #64748b;
+  font-style: italic;
+}
+
+.cv-template-sidebar .cv-bullets {
+  margin: 4px 0 0 16px;
+  padding: 0;
+  list-style-type: square;
+}
+
+.cv-template-sidebar .cv-bullet-item {
+  font-size: 9pt;
+  color: #334155;
+  margin-bottom: 3px;
+  line-height: 1.4;
+}
+
+.cv-template-sidebar .cv-bullet-item::marker {
+  color: #5b8bd0;
+}
+
+.cv-template-sidebar .cv-skill-badge {
+  display: inline-block;
+  background: #ffffff;
+  color: #1f3a5f;
+  border: 1px solid #c3d4ec;
+  padding: 1px 7px;
+  border-radius: 3px;
+  font-size: 8pt;
+  font-weight: 500;
+  margin: 2px 2px 2px 0;
+}
+
+.cv-template-sidebar .cv-left-col span[style*="margin-right:12px"] {
+  display: block !important;
+  margin: 0 0 3px 0 !important;
+}
+
+.cv-template-sidebar .cv-entry-reference {
+  border-left-color: #5b8bd0;
+}
+
+.cv-template-sidebar .cv-sheet-footer {
+  border-top-color: #5b8bd0;
+  color: #1f3a5f;
+}
+
+/* ==========================================================================
+   PDF Export Safety: keep every line inside the printable area
+   ========================================================================== */
+.cv-a4-sheet.cv-pdf-export,
+#cvPrintArea .cv-a4-sheet {
+  overflow: visible;
+}
+
+.cv-a4-sheet.cv-pdf-export .cv-contact-item,
+.cv-a4-sheet.cv-pdf-export .cv-entry-meta,
+.cv-a4-sheet.cv-pdf-export .cv-entry-reference,
+.cv-a4-sheet.cv-pdf-export .cv-entry-header > div:first-child,
+.cv-a4-sheet.cv-pdf-export a,
+#cvPrintArea .cv-contact-item,
+#cvPrintArea .cv-entry-meta,
+#cvPrintArea .cv-entry-reference,
+#cvPrintArea a {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.cv-a4-sheet.cv-pdf-export .cv-two-col-grid > div,
+#cvPrintArea .cv-two-col-grid > div {
+  min-width: 0;
+}
+
+/* Flex rows (title on the left, date on the right): let the left side shrink/wrap
+   so the right-aligned date always stays inside the printable width */
+.cv-a4-sheet .cv-entry-header > :first-child,
+.cv-a4-sheet .cv-entry[style*="display:flex"] > :first-child {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.cv-a4-sheet .cv-entry-header > .cv-entry-date,
+.cv-a4-sheet .cv-entry[style*="display:flex"] > .cv-entry-date {
+  flex: 0 0 auto;
+  max-width: 45%;
+  white-space: normal;  /* long dates wrap instead of running past the right margin */
+  text-align: right;
+}
+
+/* Sidebar column: dates sit under the title, left-aligned, full width */
+.cv-template-sidebar .cv-left-col .cv-entry-date,
+.cv-template-minimal .cv-left-col .cv-entry-date {
+  max-width: none !important;
+  text-align: left !important;
+}
+
+/* ==========================================================================
+   Page Setup badge & dialog
+   ========================================================================== */
+.cv-page-setup-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--primary-700, #1d4ed8);
+  background: var(--primary-50, #eff6ff);
+  border: 1px solid var(--primary-200, #bfdbfe);
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cv-page-setup-badge:hover {
+  background: var(--primary-100, #dbeafe);
+}
+
+.cv-page-setup-modal {
+  max-width: 720px !important;
+}
+
+.cv-page-setup-modal h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem !important;
+}
+
+.cv-ps-grid {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.cv-ps-fields .cv-form-group {
+  margin-bottom: 0.85rem;
+}
+
+.cv-ps-fields select {
+  width: 100%;
+}
+
+.cv-ps-orient {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.cv-ps-orient-opt {
+  flex: 1;
+  cursor: pointer;
+}
+
+.cv-ps-orient-opt input {
+  display: none;
+}
+
+.cv-ps-orient-opt span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid var(--gray-300, #d1d5db);
+  border-radius: var(--radius-md, 6px);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--gray-700, #374151);
+  transition: all 0.15s ease;
+}
+
+.cv-ps-orient-opt input:checked + span {
+  border-color: var(--primary-600, #2563eb);
+  background: var(--primary-50, #eff6ff);
+  color: var(--primary-700, #1d4ed8);
+  font-weight: 600;
+}
+
+.cv-ps-margins {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem 0.85rem;
+  margin-bottom: 0.85rem;
+}
+
+.cv-ps-margin label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--gray-600, #4b5563);
+  margin-bottom: 0.2rem;
+}
+
+.cv-ps-unit {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--gray-300, #d1d5db);
+  border-radius: var(--radius-md, 6px);
+  overflow: hidden;
+}
+
+.cv-ps-unit input {
+  flex: 1;
+  border: none !important;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
+  min-width: 0;
+  outline: none;
+}
+
+.cv-ps-unit span {
+  font-size: 0.75rem;
+  color: var(--gray-500, #6b7280);
+  background: var(--gray-50, #f9fafb);
+  padding: 0.35rem 0.5rem;
+  border-left: 1px solid var(--gray-200, #e5e7eb);
+}
+
+.cv-ps-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+  color: var(--gray-700, #374151);
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+}
+
+.cv-ps-check input {
+  margin-top: 2px;
+}
+
+.cv-ps-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--gray-100, #f3f4f6);
+  border-radius: var(--radius-lg, 10px);
+  padding: 1rem 0.75rem;
+  min-height: 250px;
+  justify-content: center;
+}
+
+.cv-ps-page {
+  position: relative;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  transition: all 0.2s ease;
+}
+
+.cv-ps-inner {
+  position: absolute;
+  border: 1px dashed #60a5fa;
+  background: rgba(59, 130, 246, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 6px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.cv-ps-inner span {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: #cbd5e1;
+}
+
+.cv-ps-inner span:first-child {
+  width: 60%;
+  height: 7px;
+  background: #94a3b8;
+}
+
+.cv-ps-inner span:nth-child(3) {
+  width: 85%;
+}
+
+.cv-ps-inner span:last-child {
+  width: 70%;
+}
+
+.cv-ps-info {
+  font-size: 0.75rem;
+  color: var(--gray-600, #4b5563);
+  text-align: center;
+  line-height: 1.5;
+}
+
+.cv-ps-warn {
+  margin-top: 0.35rem;
+  color: #b45309;
+}
+
+.cv-ps-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--gray-200, #e5e7eb);
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .cv-ps-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ==========================================================================

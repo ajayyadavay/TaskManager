@@ -46,9 +46,63 @@
 })();
 
 // ==========================================================================
-// Themed Dialogue Box System (Overrides window.alert & adds customConfirm)
+// Themed Dialogue Box System (Overrides window.alert & adds customConfirm / customPrompt)
 // ==========================================================================
 let _dialogResolve = null;
+let _dialogPrompt = null; // { required, requiredMessage, maxLength } while a text-input dialog is open
+
+// Builds the themed dialog if the page does not have it, and keeps it as a direct child of
+// <body> so it is always centred on the whole screen with the blurred backdrop.
+function ensureThemedDialogDom() {
+  let overlay = document.getElementById('themedDialogModal');
+  if (!overlay && document.body) {
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <div id="themedDialogModal" class="themed-dialog-overlay hidden">
+        <div class="themed-dialog-box" role="dialog" aria-modal="true" aria-labelledby="themedDialogTitle">
+          <div class="themed-dialog-icon-wrapper info" id="themedDialogIconWrapper">
+            <i class="fas fa-info-circle" id="themedDialogIcon"></i>
+          </div>
+          <div class="themed-dialog-body">
+            <h3 class="themed-dialog-title" id="themedDialogTitle">Notice</h3>
+            <p class="themed-dialog-message" id="themedDialogMessage"></p>
+          </div>
+          <div class="themed-dialog-actions" id="themedDialogActions">
+            <button type="button" class="btn secondary-btn themed-dialog-cancel-btn hidden" id="themedDialogCancelBtn">Cancel</button>
+            <button type="button" class="btn primary-btn themed-dialog-confirm-btn" id="themedDialogConfirmBtn">OK</button>
+          </div>
+        </div>
+      </div>`;
+    overlay = wrap.firstElementChild;
+    document.body.appendChild(overlay);
+    setupThemedDialogEvents();
+  }
+  if (overlay && overlay.parentElement !== document.body && document.body) {
+    document.body.appendChild(overlay);
+  }
+  return overlay;
+}
+
+// Ensures the input field exists inside the themed dialog (older index.html copies may not have it)
+function ensureThemedDialogInput() {
+  let group = document.getElementById('themedDialogInputGroup');
+  if (group) return group;
+  const body = document.querySelector('#themedDialogModal .themed-dialog-body');
+  if (!body) return null;
+  group = document.createElement('div');
+  group.className = 'themed-dialog-input-group hidden';
+  group.id = 'themedDialogInputGroup';
+  group.innerHTML = `
+    <label class="themed-dialog-input-label" id="themedDialogInputLabel" for="themedDialogInput"></label>
+    <input type="text" class="themed-dialog-input" id="themedDialogInput" autocomplete="off">
+    <div class="themed-dialog-input-error hidden" id="themedDialogInputError"></div>`;
+  body.appendChild(group);
+  document.getElementById('themedDialogInput')?.addEventListener('input', () => {
+    document.getElementById('themedDialogInputError')?.classList.add('hidden');
+    document.getElementById('themedDialogInput')?.classList.remove('invalid');
+  });
+  return group;
+}
 
 function showThemedDialog({
   title,
@@ -56,10 +110,19 @@ function showThemedDialog({
   type = 'info',
   confirmText = 'OK',
   cancelText = null,
-  isDanger = false
+  isDanger = false,
+  icon: customIcon = null,
+  input = null // { label, defaultValue, placeholder, required, requiredMessage, maxLength }
 }) {
   return new Promise((resolve) => {
     _dialogResolve = resolve;
+    _dialogPrompt = input ? {
+      required: input.required !== false,
+      requiredMessage: input.requiredMessage || 'This field is required.',
+      maxLength: input.maxLength || 200
+    } : null;
+
+    ensureThemedDialogDom();
 
     const overlay = document.getElementById('themedDialogModal');
     const iconWrapper = document.getElementById('themedDialogIconWrapper');
@@ -70,6 +133,12 @@ function showThemedDialog({
     const cancelBtn = document.getElementById('themedDialogCancelBtn');
 
     if (!overlay) {
+      if (input) {
+        const v = window._nativePrompt ? window._nativePrompt(message, input.defaultValue || '') : null;
+        _dialogPrompt = null;
+        resolve(v);
+        return;
+      }
       if (cancelText) {
         resolve(window._nativeConfirm ? window._nativeConfirm(message) : true);
       } else {
@@ -84,7 +153,7 @@ function showThemedDialog({
     let detectedType = type;
     let detectedTitle = title;
 
-    if (!title) {
+    if (!title && !input) {
       if (lowerMsg.includes('error') || lowerMsg.includes('failed') || lowerMsg.includes('cannot') || lowerMsg.includes('invalid') || lowerMsg.includes('permission denied')) {
         detectedType = 'danger';
         detectedTitle = 'Error';
@@ -111,14 +180,40 @@ function showThemedDialog({
       } else {
         icon.className = 'fas fa-info-circle';
       }
+      if (customIcon) icon.className = customIcon;
     }
 
-    if (titleEl) titleEl.textContent = detectedTitle;
-    if (messageEl) messageEl.textContent = strMsg;
+    if (titleEl) titleEl.textContent = detectedTitle || (input ? 'Enter Details' : 'Notice');
+    if (messageEl) {
+      messageEl.textContent = strMsg;
+      messageEl.classList.toggle('hidden', !strMsg);
+    }
+
+    // Text-input (prompt) mode
+    const inputGroup = ensureThemedDialogInput();
+    const inputEl = document.getElementById('themedDialogInput');
+    const inputLabel = document.getElementById('themedDialogInputLabel');
+    const inputError = document.getElementById('themedDialogInputError');
+    if (inputGroup && inputEl) {
+      if (input) {
+        inputGroup.classList.remove('hidden');
+        if (inputLabel) {
+          inputLabel.textContent = input.label || '';
+          inputLabel.classList.toggle('hidden', !input.label);
+        }
+        inputEl.value = input.defaultValue || '';
+        inputEl.placeholder = input.placeholder || '';
+        inputEl.maxLength = _dialogPrompt.maxLength;
+        inputEl.classList.remove('invalid');
+        inputError?.classList.add('hidden');
+      } else {
+        inputGroup.classList.add('hidden');
+      }
+    }
 
     if (confirmBtn) {
       confirmBtn.textContent = confirmText || 'OK';
-      if (isDanger || lowerMsg.includes('delete') || lowerMsg.includes('remove') || lowerMsg.includes('empty') || lowerMsg.includes('trash')) {
+      if (!input && (isDanger || lowerMsg.includes('delete') || lowerMsg.includes('remove') || lowerMsg.includes('empty') || lowerMsg.includes('trash'))) {
         confirmBtn.classList.add('danger');
       } else {
         confirmBtn.classList.remove('danger');
@@ -135,11 +230,40 @@ function showThemedDialog({
     }
 
     overlay.classList.remove('hidden');
-    setTimeout(() => confirmBtn?.focus(), 50);
+    setTimeout(() => {
+      if (input && inputEl) {
+        inputEl.focus();
+        inputEl.select();
+      } else {
+        confirmBtn?.focus();
+      }
+    }, 50);
   });
 }
 
 function closeThemedDialog(result) {
+  // Prompt mode: OK returns the trimmed text (validated), Cancel returns null
+  if (_dialogPrompt) {
+    const inputEl = document.getElementById('themedDialogInput');
+    if (result) {
+      const value = (inputEl?.value || '').trim();
+      if (_dialogPrompt.required && !value) {
+        const err = document.getElementById('themedDialogInputError');
+        if (err) {
+          err.textContent = _dialogPrompt.requiredMessage;
+          err.classList.remove('hidden');
+        }
+        inputEl?.classList.add('invalid');
+        inputEl?.focus();
+        return; // keep the dialog open
+      }
+      result = value;
+    } else {
+      result = null;
+    }
+    _dialogPrompt = null;
+  }
+
   const overlay = document.getElementById('themedDialogModal');
   if (overlay) {
     overlay.classList.add('hidden');
@@ -161,6 +285,30 @@ window.alert = function(message, customTitle) {
   });
 };
 
+// Global window.customPrompt helper – themed replacement for window.prompt()
+// Usage: const name = await customPrompt('Enter a name', { title, label, defaultValue, placeholder, confirmText })
+// Resolves with the trimmed text, or null if the user cancels.
+window._nativePrompt = window._nativePrompt || window.prompt;
+window.customPrompt = function(message, options = {}) {
+  return showThemedDialog({
+    title: options.title || 'Enter Details',
+    message: message,
+    type: options.type || 'info',
+    icon: options.icon || 'fas fa-pen-to-square',
+    confirmText: options.confirmText || 'OK',
+    cancelText: options.cancelText || 'Cancel',
+    isDanger: false,
+    input: {
+      label: options.label,
+      defaultValue: options.defaultValue,
+      placeholder: options.placeholder,
+      required: options.required,
+      requiredMessage: options.requiredMessage,
+      maxLength: options.maxLength
+    }
+  });
+};
+
 // Global window.customConfirm helper
 window._nativeConfirm = window._nativeConfirm || window.confirm;
 window.customConfirm = function(message, options = {}) {
@@ -176,6 +324,13 @@ window.customConfirm = function(message, options = {}) {
 
 function setupThemedDialogEvents() {
   const overlay = document.getElementById('themedDialogModal');
+  if (!overlay || overlay.dataset.eventsBound === '1') return;
+  overlay.dataset.eventsBound = '1';
+  const promptInput = document.getElementById('themedDialogInput');
+  promptInput?.addEventListener('input', () => {
+    document.getElementById('themedDialogInputError')?.classList.add('hidden');
+    promptInput.classList.remove('invalid');
+  });
   const confirmBtn = document.getElementById('themedDialogConfirmBtn');
   const cancelBtn = document.getElementById('themedDialogCancelBtn');
 

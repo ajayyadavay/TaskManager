@@ -60,6 +60,309 @@
     references: 'fa-user-check'
   };
 
+  // ==========================================================================
+  // Page Setup (PDF export, Print & Word): page size, orientation, margins
+  // Default: A4 Portrait with Standard 20 mm margins on all sides.
+  // ==========================================================================
+  const CV_PAGE_SIZES = {
+    a4: { label: 'A4 (210 × 297 mm)', w: 210, h: 297 },
+    letter: { label: 'US Letter (8.5 × 11 in)', w: 215.9, h: 279.4 },
+    legal: { label: 'US Legal (8.5 × 14 in)', w: 215.9, h: 355.6 },
+    a5: { label: 'A5 (148 × 210 mm)', w: 148, h: 210 },
+    a3: { label: 'A3 (297 × 420 mm)', w: 297, h: 420 }
+  };
+
+  const CV_MARGIN_PRESETS = {
+    standard: { label: 'Standard – 20 mm all sides', top: 20, right: 20, bottom: 20, left: 20 },
+    narrow: { label: 'Narrow – 12.7 mm (0.5 in)', top: 12.7, right: 12.7, bottom: 12.7, left: 12.7 },
+    moderate: { label: 'Moderate – 25.4 mm top/bottom, 19.1 mm sides', top: 25.4, right: 19.1, bottom: 25.4, left: 19.1 },
+    normal: { label: 'Wide – 25.4 mm (1 in) all sides', top: 25.4, right: 25.4, bottom: 25.4, left: 25.4 },
+    custom: { label: 'Custom…' }
+  };
+
+  const CV_PAGE_SETUP_DEFAULT_KEY = 'taskay_cv_page_setup_default';
+  const CV_MIN_MARGIN_MM = 5;
+  const CV_MAX_MARGIN_MM = 60;
+  const CV_FOOTER_MIN_BOTTOM_MM = 10; // room for the PDF footer inside the bottom margin
+
+  function getStandardPageSetup() {
+    return {
+      size: 'a4',
+      orientation: 'portrait',
+      marginPreset: 'standard',
+      margins: { top: 20, right: 20, bottom: 20, left: 20 },
+      showFooter: true
+    };
+  }
+
+  function normalizePageSetup(ps) {
+    const std = getStandardPageSetup();
+    const out = Object.assign({}, std, ps || {});
+    if (!CV_PAGE_SIZES[out.size]) out.size = std.size;
+    if (out.orientation !== 'landscape') out.orientation = 'portrait';
+    if (!CV_MARGIN_PRESETS[out.marginPreset]) out.marginPreset = 'custom';
+    out.showFooter = out.showFooter !== false;
+
+    const src = (ps && ps.margins) || std.margins;
+    const m = {};
+    ['top', 'right', 'bottom', 'left'].forEach(k => {
+      let v = parseFloat(src[k]);
+      if (!isFinite(v)) v = std.margins[k];
+      m[k] = Math.round(Math.min(CV_MAX_MARGIN_MM, Math.max(CV_MIN_MARGIN_MM, v)) * 10) / 10;
+    });
+    if (out.showFooter && m.bottom < CV_FOOTER_MIN_BOTTOM_MM) m.bottom = CV_FOOTER_MIN_BOTTOM_MM;
+    out.margins = m;
+
+    // Guarantee a usable printable area so content is never squeezed or cropped
+    const geo = getPageGeometry(out);
+    if (geo.innerW < 90 || geo.innerH < 120) {
+      out.marginPreset = 'standard';
+      out.margins = Object.assign({}, std.margins);
+    }
+    return out;
+  }
+
+  function getPageGeometry(ps) {
+    const size = CV_PAGE_SIZES[ps.size] || CV_PAGE_SIZES.a4;
+    const landscape = ps.orientation === 'landscape';
+    const w = landscape ? size.h : size.w;
+    const h = landscape ? size.w : size.h;
+    const m = ps.margins || getStandardPageSetup().margins;
+    return {
+      w, h, m,
+      innerW: Math.round((w - m.left - m.right) * 10) / 10,
+      innerH: Math.round((h - m.top - m.bottom) * 10) / 10
+    };
+  }
+
+  function getUserDefaultPageSetup() {
+    try {
+      const raw = localStorage.getItem(CV_PAGE_SETUP_DEFAULT_KEY);
+      if (raw) return normalizePageSetup(JSON.parse(raw));
+    } catch (e) { /* ignore */ }
+    return getStandardPageSetup();
+  }
+
+  function getCvPageSetup(cv) {
+    return normalizePageSetup((cv && cv.pageSetup) || getUserDefaultPageSetup());
+  }
+
+  function describePageSetup(ps) {
+    const sizeName = { a4: 'A4', letter: 'Letter', legal: 'Legal', a5: 'A5', a3: 'A3' }[ps.size] || 'A4';
+    const orient = ps.orientation === 'landscape' ? 'Landscape' : 'Portrait';
+    const preset = ps.marginPreset === 'custom' ? 'Custom margins' : `${(CV_MARGIN_PRESETS[ps.marginPreset].label || '').split(' –')[0]} margins`;
+    return `${sizeName} · ${orient} · ${preset}`;
+  }
+
+  // Makes the on-screen sheet match the real page: same size and margins as the PDF
+  function applyPageSetupToSheet(sheet, ps) {
+    if (!sheet) return;
+    const g = getPageGeometry(ps);
+    sheet.style.width = `${g.w}mm`;
+    sheet.style.minHeight = `${g.h}mm`;
+    sheet.style.padding = `${g.m.top}mm ${g.m.right}mm ${g.m.bottom}mm ${g.m.left}mm`;
+  }
+
+  // Dynamic @page rule for the browser Print dialog
+  function applyPrintPageRule(ps) {
+    const g = getPageGeometry(ps);
+    let styleEl = document.getElementById('cvDynamicPageRule');
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = 'cvDynamicPageRule';
+      document.head.appendChild(styleEl);
+    }
+    styleEl.textContent = `
+      @media print {
+        @page { size: ${g.w}mm ${g.h}mm; margin: ${g.m.top}mm ${g.m.right}mm ${g.m.bottom}mm ${g.m.left}mm; }
+        #cvPrintArea .cv-a4-sheet {
+          width: ${g.innerW}mm !important;
+          max-width: ${g.innerW}mm !important;
+          min-height: auto !important;
+          padding: 0 !important;
+        }
+        #cvPrintArea .cv-sheet-footer { display: none !important; }
+      }
+    `;
+  }
+
+  function updatePageSetupBadge() {
+    const badge = document.getElementById('cvPageSetupBadge');
+    if (badge && currentCv) badge.textContent = describePageSetup(getCvPageSetup(currentCv));
+  }
+
+  // ---------- Page Setup dialog ----------
+  window.openCvPageSetup = function (exportAfter) {
+    if (!currentCv) return;
+    readTopBarValues();
+    const ps = getCvPageSetup(currentCv);
+
+    let modal = document.getElementById('cvPageSetupModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'cvPageSetupModal';
+      modal.className = 'modal hidden';
+      modal.addEventListener('click', e => { if (e.target === modal) window.closeCvPageSetup(); });
+      document.body.appendChild(modal);
+    }
+
+    const sizeOpts = Object.keys(CV_PAGE_SIZES).map(k =>
+      `<option value="${k}" ${ps.size === k ? 'selected' : ''}>${CV_PAGE_SIZES[k].label}</option>`).join('');
+    const presetOpts = Object.keys(CV_MARGIN_PRESETS).map(k =>
+      `<option value="${k}" ${ps.marginPreset === k ? 'selected' : ''}>${CV_MARGIN_PRESETS[k].label}</option>`).join('');
+    const marginInput = (k, label) => `
+      <div class="cv-ps-margin">
+        <label for="cvPsM_${k}">${label}</label>
+        <div class="cv-ps-unit"><input type="number" id="cvPsM_${k}" min="${CV_MIN_MARGIN_MM}" max="${CV_MAX_MARGIN_MM}" step="0.1" value="${ps.margins[k]}" oninput="window.onCvPageSetupMarginInput()"><span>mm</span></div>
+      </div>`;
+
+    modal.innerHTML = `
+      <div class="modal-content cv-page-setup-modal">
+        <span class="close-btn" onclick="window.closeCvPageSetup()">&times;</span>
+        <h3><i class="fas fa-file-pdf" style="color:#dc2626;"></i> PDF Page Setup</h3>
+        <div class="cv-ps-grid">
+          <div class="cv-ps-fields">
+            <div class="cv-form-group">
+              <label for="cvPsSize">Paper Size</label>
+              <select id="cvPsSize" onchange="window.onCvPageSetupChange()">${sizeOpts}</select>
+            </div>
+            <div class="cv-form-group">
+              <label>Orientation</label>
+              <div class="cv-ps-orient">
+                <label class="cv-ps-orient-opt"><input type="radio" name="cvPsOrient" value="portrait" ${ps.orientation === 'portrait' ? 'checked' : ''} onchange="window.onCvPageSetupChange()"><span><i class="far fa-file"></i> Portrait</span></label>
+                <label class="cv-ps-orient-opt"><input type="radio" name="cvPsOrient" value="landscape" ${ps.orientation === 'landscape' ? 'checked' : ''} onchange="window.onCvPageSetupChange()"><span><i class="far fa-file" style="transform:rotate(90deg);"></i> Landscape</span></label>
+              </div>
+            </div>
+            <div class="cv-form-group">
+              <label for="cvPsPreset">Margins</label>
+              <select id="cvPsPreset" onchange="window.onCvPageSetupPresetChange()">${presetOpts}</select>
+            </div>
+            <div class="cv-ps-margins">
+              ${marginInput('top', 'Top')}${marginInput('bottom', 'Bottom')}${marginInput('left', 'Left')}${marginInput('right', 'Right')}
+            </div>
+            <label class="cv-ps-check"><input type="checkbox" id="cvPsFooter" ${ps.showFooter ? 'checked' : ''} onchange="window.onCvPageSetupChange()"> Show footer with name &amp; page numbers (inside bottom margin)</label>
+            <label class="cv-ps-check"><input type="checkbox" id="cvPsSaveDefault"> Use these settings as my default for new CVs</label>
+          </div>
+          <div class="cv-ps-preview">
+            <div id="cvPsPage" class="cv-ps-page"><div id="cvPsInner" class="cv-ps-inner"><span></span><span></span><span></span><span></span><span></span></div></div>
+            <div id="cvPsInfo" class="cv-ps-info"></div>
+          </div>
+        </div>
+        <div class="cv-ps-actions">
+          <button class="btn secondary-btn small-btn" onclick="window.resetCvPageSetupForm()" title="A4 Portrait, Standard 20 mm margins"><i class="fas fa-rotate-left"></i> Reset to Standard</button>
+          <div style="flex:1;"></div>
+          <button class="btn secondary-btn small-btn" onclick="window.closeCvPageSetup()">Cancel</button>
+          <button class="btn secondary-btn small-btn" onclick="window.applyCvPageSetup(false)"><i class="fas fa-check"></i> Apply</button>
+          <button class="btn primary-btn small-btn" onclick="window.applyCvPageSetup(true)"><i class="fas fa-file-pdf"></i> Apply &amp; Export PDF</button>
+        </div>
+      </div>
+    `;
+    modal.classList.remove('hidden');
+    refreshCvPageSetupPreview();
+  };
+
+  window.closeCvPageSetup = function () {
+    const modal = document.getElementById('cvPageSetupModal');
+    if (modal) modal.classList.add('hidden');
+  };
+
+  function readCvPageSetupForm() {
+    const val = id => document.getElementById(id);
+    const orient = document.querySelector('input[name="cvPsOrient"]:checked');
+    return {
+      size: val('cvPsSize') ? val('cvPsSize').value : 'a4',
+      orientation: orient ? orient.value : 'portrait',
+      marginPreset: val('cvPsPreset') ? val('cvPsPreset').value : 'standard',
+      margins: {
+        top: parseFloat(val('cvPsM_top')?.value),
+        right: parseFloat(val('cvPsM_right')?.value),
+        bottom: parseFloat(val('cvPsM_bottom')?.value),
+        left: parseFloat(val('cvPsM_left')?.value)
+      },
+      showFooter: !!(val('cvPsFooter') && val('cvPsFooter').checked)
+    };
+  }
+
+  function refreshCvPageSetupPreview() {
+    const raw = readCvPageSetupForm();
+    const ps = normalizePageSetup(raw);
+    const g = getPageGeometry(ps);
+    const page = document.getElementById('cvPsPage');
+    const inner = document.getElementById('cvPsInner');
+    const info = document.getElementById('cvPsInfo');
+    if (page && inner) {
+      const maxBox = 190;
+      const scale = maxBox / Math.max(g.w, g.h);
+      page.style.width = `${g.w * scale}px`;
+      page.style.height = `${g.h * scale}px`;
+      inner.style.top = `${g.m.top * scale}px`;
+      inner.style.left = `${g.m.left * scale}px`;
+      inner.style.right = `${g.m.right * scale}px`;
+      inner.style.bottom = `${g.m.bottom * scale}px`;
+    }
+    if (info) {
+      const notes = [];
+      ['top', 'right', 'bottom', 'left'].forEach(k => {
+        if (isFinite(raw.margins[k]) && Math.abs(raw.margins[k] - ps.margins[k]) > 0.05) {
+          notes.push(`${k[0].toUpperCase() + k.slice(1)} margin adjusted to ${ps.margins[k]} mm`);
+        }
+      });
+      info.innerHTML = `
+        <div><strong>Page:</strong> ${g.w} × ${g.h} mm</div>
+        <div><strong>Printable area:</strong> ${g.innerW} × ${g.innerH} mm</div>
+        ${notes.length ? `<div class="cv-ps-warn"><i class="fas fa-circle-info"></i> ${notes.join('<br>')}</div>` : ''}
+      `;
+    }
+  }
+
+  window.onCvPageSetupChange = function () { refreshCvPageSetupPreview(); };
+
+  window.onCvPageSetupPresetChange = function () {
+    const key = document.getElementById('cvPsPreset')?.value;
+    const preset = CV_MARGIN_PRESETS[key];
+    if (preset && key !== 'custom') {
+      ['top', 'right', 'bottom', 'left'].forEach(k => {
+        const el = document.getElementById(`cvPsM_${k}`);
+        if (el) el.value = preset[k];
+      });
+    }
+    refreshCvPageSetupPreview();
+  };
+
+  window.onCvPageSetupMarginInput = function () {
+    const sel = document.getElementById('cvPsPreset');
+    if (sel) {
+      const raw = readCvPageSetupForm().margins;
+      const match = Object.keys(CV_MARGIN_PRESETS).find(k => k !== 'custom' &&
+        ['top', 'right', 'bottom', 'left'].every(s => Math.abs(CV_MARGIN_PRESETS[k][s] - raw[s]) < 0.05));
+      sel.value = match || 'custom';
+    }
+    refreshCvPageSetupPreview();
+  };
+
+  window.resetCvPageSetupForm = function () {
+    const std = getStandardPageSetup();
+    document.getElementById('cvPsSize').value = std.size;
+    document.querySelectorAll('input[name="cvPsOrient"]').forEach(r => { r.checked = r.value === std.orientation; });
+    document.getElementById('cvPsPreset').value = std.marginPreset;
+    ['top', 'right', 'bottom', 'left'].forEach(k => { document.getElementById(`cvPsM_${k}`).value = std.margins[k]; });
+    document.getElementById('cvPsFooter').checked = std.showFooter;
+    refreshCvPageSetupPreview();
+  };
+
+  window.applyCvPageSetup = function (exportNow) {
+    if (!currentCv) return;
+    const ps = normalizePageSetup(readCvPageSetupForm());
+    currentCv.pageSetup = ps;
+    if (document.getElementById('cvPsSaveDefault')?.checked) {
+      try { localStorage.setItem(CV_PAGE_SETUP_DEFAULT_KEY, JSON.stringify(ps)); } catch (e) { /* ignore */ }
+    }
+    window.closeCvPageSetup();
+    updateLivePreview();
+    showFloatingNotification(`Page setup: ${describePageSetup(ps)}`);
+    if (exportNow) generatePdfForCv(currentCv);
+  };
+
   // Sample data generator for new CVs
   function createDefaultCvData(title = 'Professional CV') {
     const userEmail = window.currentUser ? window.currentUser.email : '';
@@ -69,7 +372,7 @@
       id: 'cv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
       title: title,
       visibility: 'private', // 'private' or 'public'
-      template: 'modern', // 'modern', 'classic', 'minimal', 'ats'
+      template: 'modern', // 'modern', 'classic', 'minimal', 'ats', 'elegant', 'sidebar'
       autoSave: true, // Default auto-save ON for each newly created CV
       createdBy: userEmail,
       createdByName: userName,
@@ -77,6 +380,7 @@
       updatedAt: new Date().toISOString(),
       sectionsOrder: [...DEFAULT_SECTIONS_ORDER],
       hiddenSections: [],
+      pageSetup: getUserDefaultPageSetup(), // A4 Portrait, Standard margins unless user changed default
 
       personal: {
         fullName: userName,
@@ -102,6 +406,8 @@
           endDate: '',
           current: true,
           employmentType: 'Full-time',
+          duration: '',
+          reference: 'Dr. Evelyn Carter, VP of Engineering – e.carter@apexsolutions.com',
           responsibilities: [
             'Spearheaded the migration of legacy monolithic services to an event-driven microservices architecture, cutting end-to-end task turnaround by 42%.',
             'Supervised a team of 14 senior engineers, driving sprint cadence, backlog grooming, and quarterly milestone deliverables.',
@@ -118,6 +424,8 @@
           endDate: '2022-03',
           current: false,
           employmentType: 'Full-time',
+          duration: '',
+          reference: '',
           responsibilities: [
             'Designed and maintained high-throughput REST and GraphQL APIs serving 3M+ active monthly queries.',
             'Collaborated with UX and product teams to implement accessible, responsive user interfaces.'
@@ -160,6 +468,8 @@
           id: 'cert_' + Math.random().toString(36).substr(2, 6),
           name: 'AWS Certified Solutions Architect – Professional',
           organization: 'Amazon Web Services',
+          location: 'Online',
+          duration: '6 weeks',
           issueDate: '2023-08',
           expirationDate: '2026-08',
           credentialId: 'AWS-SAP-894102',
@@ -169,6 +479,8 @@
           id: 'cert_' + Math.random().toString(36).substr(2, 6),
           name: 'Project Management Professional (PMP)',
           organization: 'Project Management Institute (PMI)',
+          location: 'San Francisco, CA',
+          duration: '35 hours',
           issueDate: '2022-02',
           expirationDate: '2025-02',
           credentialId: 'PMI-PMP-2049182',
@@ -194,6 +506,7 @@
           title: 'Outstanding Technical Leadership Award',
           issuer: 'Apex Solutions Annual Excellence Forum',
           date: '2023-12',
+          duration: '',
           description: 'Awarded for exceptional leadership in enterprise digital transformation and cross-functional team delivery.'
         }
       ],
@@ -218,12 +531,14 @@
           id: 'mem_' + Math.random().toString(36).substr(2, 6),
           organization: 'Institute of Electrical and Electronics Engineers (IEEE)',
           role: 'Senior Member',
+          membershipNo: '94021873',
           period: '2020 - Present'
         },
         {
           id: 'mem_' + Math.random().toString(36).substr(2, 6),
           organization: 'Association for Computing Machinery (ACM)',
           role: 'Professional Member',
+          membershipNo: '3812094',
           period: '2019 - Present'
         }
       ],
@@ -408,7 +723,9 @@
         modern: 'Modern Professional',
         classic: 'Classic Academic',
         minimal: 'Two-Column Minimalist',
-        ats: 'Clean and Executive'
+        ats: 'Clean and Executive',
+        elegant: 'Elegant Teal & Gold',
+        sidebar: 'Navy Sidebar Executive'
       }[cv.template || 'modern'] || 'Modern Professional';
 
       return `
@@ -459,11 +776,22 @@
   // ==========================================================================
   // CV Editor & Live Preview Workspace
   // ==========================================================================
-  window.createNewCvPrompt = function () {
-    const title = prompt('Enter a title for your new CV:', 'My Professional CV');
+  window.createNewCvPrompt = async function () {
+    const title = typeof window.customPrompt === 'function'
+      ? await window.customPrompt('Give your new CV a name. You can rename it anytime from the editor.', {
+          title: 'Create New CV',
+          label: 'CV Title',
+          defaultValue: 'My Professional CV',
+          placeholder: 'e.g. Network Engineer CV – 2026',
+          confirmText: 'Create CV',
+          icon: 'fas fa-file-circle-plus',
+          requiredMessage: 'Please enter a title for your CV.',
+          maxLength: 120
+        })
+      : prompt('Enter a title for your new CV:', 'My Professional CV');
     if (title === null) return;
 
-    currentCv = createDefaultCvData(title.trim() || 'My Professional CV');
+    currentCv = createDefaultCvData(String(title).trim() || 'My Professional CV');
     saveCvToStorage(currentCv);
     openCvEditor(currentCv);
   };
@@ -910,6 +1238,17 @@
             </div>
           </div>
 
+          <div class="cv-form-row">
+            <div class="cv-form-group">
+              <label>Duration</label>
+              <input type="text" value="${escapeHtml(exp.duration || '')}" placeholder="${escapeHtml(computeDuration(exp.startDate, exp.current ? 'Present' : exp.endDate) ? 'Auto: ' + computeDuration(exp.startDate, exp.current ? 'Present' : exp.endDate) : 'e.g. 2 yrs 6 mos')}" oninput="window.updateExpField('${exp.id}', 'duration', this.value)">
+            </div>
+            <div class="cv-form-group">
+              <label>Reference</label>
+              <input type="text" value="${escapeHtml(exp.reference || '')}" placeholder="e.g. Mr. Ram Sharma, Manager – ram@example.com, +977-98XXXXXXXX" oninput="window.updateExpField('${exp.id}', 'reference', this.value)">
+            </div>
+          </div>
+
           <div class="cv-form-group">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.25rem;">
               <label>Responsibilities & Bullet Points</label>
@@ -946,6 +1285,8 @@
       endDate: '',
       current: false,
       employmentType: 'Full-time',
+      duration: '',
+      reference: '',
       responsibilities: ['Managed key project deliverables with 100% on-time execution.']
     });
     renderAllSectionForms();
@@ -1261,7 +1602,7 @@
       return `
         <div class="cv-item-box">
           <div class="cv-item-box-header">
-            <div class="cv-item-box-title">#${index + 1}: ${escapeHtml(cert.name || 'Certification')}</div>
+            <div class="cv-item-box-title">#${index + 1}: ${escapeHtml(cert.name || 'Training')}</div>
             <div class="cv-item-box-tools">
               ${!isFirst ? `<button class="cv-chip-btn" onclick="window.moveCertItem(${index}, -1)" title="Move Up"><i class="fas fa-arrow-up"></i></button>` : ''}
               ${!isLast ? `<button class="cv-chip-btn" onclick="window.moveCertItem(${index}, 1)" title="Move Down"><i class="fas fa-arrow-down"></i></button>` : ''}
@@ -1271,12 +1612,23 @@
 
           <div class="cv-form-row">
             <div class="cv-form-group">
-              <label>Certification Name *</label>
+              <label>Training Name *</label>
               <input type="text" value="${escapeHtml(cert.name || '')}" placeholder="e.g. AWS Certified Solutions Architect" oninput="window.updateCertField('${cert.id}', 'name', this.value)">
             </div>
             <div class="cv-form-group">
               <label>Issuing Organization *</label>
               <input type="text" value="${escapeHtml(cert.organization || '')}" placeholder="e.g. Amazon Web Services" oninput="window.updateCertField('${cert.id}', 'organization', this.value)">
+            </div>
+          </div>
+
+          <div class="cv-form-row">
+            <div class="cv-form-group">
+              <label>Location</label>
+              <input type="text" value="${escapeHtml(cert.location || '')}" placeholder="e.g. Kathmandu, Nepal / Online" oninput="window.updateCertField('${cert.id}', 'location', this.value)">
+            </div>
+            <div class="cv-form-group">
+              <label>Duration</label>
+              <input type="text" value="${escapeHtml(cert.duration || '')}" placeholder="e.g. 2 weeks / 40 hours / Jan–Mar 2024" oninput="window.updateCertField('${cert.id}', 'duration', this.value)">
             </div>
           </div>
 
@@ -1320,6 +1672,8 @@
       id: 'cert_' + Math.random().toString(36).substr(2, 6),
       name: '',
       organization: '',
+      location: '',
+      duration: '',
       issueDate: '',
       expirationDate: '',
       credentialId: '',
@@ -1493,6 +1847,10 @@
               <input type="text" value="${escapeHtml(award.date || '')}" placeholder="e.g. 2023-11" oninput="window.updateAwardField('${award.id}', 'date', this.value)">
             </div>
             <div class="cv-form-group">
+              <label>Duration</label>
+              <input type="text" value="${escapeHtml(award.duration || '')}" placeholder="e.g. 2019 - 2023 / 4 years" oninput="window.updateAwardField('${award.id}', 'duration', this.value)">
+            </div>
+            <div class="cv-form-group">
               <label>Description / Monetary Grant</label>
               <input type="text" value="${escapeHtml(award.description || '')}" placeholder="e.g. Awarded for top 1% academic achievement" oninput="window.updateAwardField('${award.id}', 'description', this.value)">
             </div>
@@ -1517,6 +1875,7 @@
       title: '',
       issuer: '',
       date: '',
+      duration: '',
       description: ''
     });
     renderAllSectionForms();
@@ -1725,6 +2084,13 @@
               <label>Membership Role / Grade</label>
               <input type="text" value="${escapeHtml(mem.role || '')}" placeholder="e.g. Senior Member / Fellow" oninput="window.updateMemField('${mem.id}', 'role', this.value)">
             </div>
+          </div>
+
+          <div class="cv-form-row">
+            <div class="cv-form-group">
+              <label>Membership Number</label>
+              <input type="text" value="${escapeHtml(mem.membershipNo || '')}" placeholder="e.g. NEC-12345 / 94021873" oninput="window.updateMemField('${mem.id}', 'membershipNo', this.value)">
+            </div>
             <div class="cv-form-group">
               <label>Active Period</label>
               <input type="text" value="${escapeHtml(mem.period || '')}" placeholder="e.g. 2020 - Present" oninput="window.updateMemField('${mem.id}', 'period', this.value)">
@@ -1749,6 +2115,7 @@
       id: 'mem_' + Math.random().toString(36).substr(2, 6),
       organization: '',
       role: '',
+      membershipNo: '',
       period: ''
     });
     renderAllSectionForms();
@@ -1993,6 +2360,8 @@
     const cvHtml = renderCvDocumentHtml(currentCv, template);
 
     previewContainer.innerHTML = cvHtml;
+    applyPageSetupToSheet(previewContainer.querySelector('.cv-a4-sheet'), getCvPageSetup(currentCv));
+    updatePageSetupBadge();
     applyZoom();
     triggerCvAutoSave();
   }
@@ -2006,7 +2375,7 @@
   };
 
   window.cvZoomOut = function () {
-    if (cvZoomLevel > 0.4) {
+    if (cvZoomLevel > 0.3) {
       cvZoomLevel = Math.round((cvZoomLevel - 0.1) * 10) / 10;
       applyZoom();
     }
@@ -2016,8 +2385,9 @@
     const scrollArea = document.querySelector('.cv-preview-scroll-area');
     if (scrollArea) {
       const areaWidth = scrollArea.clientWidth - 40;
-      // 210mm in pixels is ~794px
-      const targetZoom = Math.min(1.0, Math.max(0.4, areaWidth / 800));
+      const sheet = document.querySelector('#cvLivePreviewArea .cv-a4-sheet');
+      const sheetWidth = sheet ? sheet.offsetWidth : 800; // A4 portrait ≈ 794px
+      const targetZoom = Math.min(1.0, Math.max(0.3, areaWidth / (sheetWidth + 6)));
       cvZoomLevel = Math.round(targetZoom * 100) / 100;
       applyZoom();
     }
@@ -2075,6 +2445,7 @@
     if (cv.experience && cv.experience.length > 0) {
       const expsHtml = cv.experience.map(exp => {
         const dateStr = exp.startDate ? `${exp.startDate} – ${exp.current ? 'Present' : (exp.endDate || 'Present')}` : '';
+        const durationStr = (exp.duration || '').trim() || computeDuration(exp.startDate, exp.current ? 'Present' : exp.endDate);
         const bulletsHtml = (exp.responsibilities || []).filter(b => b.trim()).map(b => `
           <li class="cv-bullet-item">${escapeHtml(b)}</li>
         `).join('');
@@ -2087,7 +2458,7 @@
                 ${exp.organization ? ` &bull; <span class="cv-entry-subtitle">${escapeHtml(exp.organization)}</span>` : ''}
                 ${exp.department ? `<span style="font-size:8.5pt;color:#666;"> (${escapeHtml(exp.department)})</span>` : ''}
               </div>
-              <div class="cv-entry-date">${escapeHtml(dateStr)}</div>
+              <div class="cv-entry-date">${escapeHtml(dateStr)}${durationStr ? `<span class="cv-entry-duration">${escapeHtml(durationStr)}</span>` : ''}</div>
             </div>
             ${exp.location || exp.employmentType ? `
               <div class="cv-entry-location">
@@ -2097,6 +2468,7 @@
               </div>
             ` : ''}
             ${bulletsHtml ? `<ul class="cv-bullets">${bulletsHtml}</ul>` : ''}
+            ${exp.reference && exp.reference.trim() ? `<div class="cv-entry-reference"><strong>Reference:</strong> ${escapeHtml(exp.reference)}</div>` : ''}
           </div>
         `;
       }).join('');
@@ -2164,19 +2536,23 @@
 
     // 5. Certifications
     if (cv.certifications && cv.certifications.length > 0) {
-      const certsHtml = cv.certifications.map(cert => `
+      const certsHtml = cv.certifications.map(cert => {
+        const meta = [];
+        if (cert.organization) meta.push(escapeHtml(cert.organization));
+        if (cert.location) meta.push(`<i class="fas fa-map-marker-alt" style="font-size:7.5pt;"></i> ${escapeHtml(cert.location)}`);
+        if (cert.duration && cert.issueDate) meta.push(`Completed: ${escapeHtml(cert.issueDate)}`);
+        if (cert.credentialId) meta.push(`ID: ${escapeHtml(cert.credentialId)}`);
+        if (cert.expirationDate) meta.push(`Expires: ${escapeHtml(cert.expirationDate)}`);
+        return `
         <div class="cv-entry cv-avoid-break">
           <div class="cv-entry-header">
-            <span class="cv-entry-title">${escapeHtml(cert.name || 'Certification')}</span>
-            <span class="cv-entry-date">${escapeHtml(cert.issueDate || '')}</span>
+            <span class="cv-entry-title">${escapeHtml(cert.name || 'Training')}</span>
+            <span class="cv-entry-date">${escapeHtml(cert.duration || cert.issueDate || '')}</span>
           </div>
-          <div style="font-size:8.5pt;color:#555;">
-            ${escapeHtml(cert.organization || '')}
-            ${cert.credentialId ? ` &bull; ID: ${escapeHtml(cert.credentialId)}` : ''}
-            ${cert.expirationDate ? ` &bull; Expires: ${escapeHtml(cert.expirationDate)}` : ''}
-          </div>
+          ${meta.length ? `<div class="cv-entry-meta" style="font-size:8.5pt;color:#555;">${meta.join(' &bull; ')}</div>` : ''}
         </div>
-      `).join('');
+      `;
+      }).join('');
 
       renderedSections.certifications = `
         <div class="cv-sec-block">
@@ -2213,18 +2589,21 @@
 
     // 7. Awards
     if (cv.awards && cv.awards.length > 0) {
-      const awardsHtml = cv.awards.map(award => `
+      const awardsHtml = cv.awards.map(award => {
+        const meta = [];
+        if (award.issuer) meta.push(escapeHtml(award.issuer));
+        if (award.duration && award.date) meta.push(`Awarded: ${escapeHtml(award.date)}`);
+        if (award.description) meta.push(escapeHtml(award.description));
+        return `
         <div class="cv-entry cv-avoid-break">
           <div class="cv-entry-header">
             <span class="cv-entry-title">${escapeHtml(award.title || '')}</span>
-            <span class="cv-entry-date">${escapeHtml(award.date || '')}</span>
+            <span class="cv-entry-date">${escapeHtml(award.duration || award.date || '')}</span>
           </div>
-          <div style="font-size:8.5pt;color:#555;">
-            ${escapeHtml(award.issuer || '')}
-            ${award.description ? ` &bull; ${escapeHtml(award.description)}` : ''}
-          </div>
+          ${meta.length ? `<div class="cv-entry-meta" style="font-size:8.5pt;color:#555;">${meta.join(' &bull; ')}</div>` : ''}
         </div>
-      `).join('');
+      `;
+      }).join('');
 
       renderedSections.awards = `
         <div class="cv-sec-block">
@@ -2271,6 +2650,7 @@
           <div>
             <strong>${escapeHtml(mem.organization || '')}</strong>
             ${mem.role ? ` &ndash; <em>${escapeHtml(mem.role)}</em>` : ''}
+            ${mem.membershipNo ? `<div class="cv-entry-meta" style="font-size:8.5pt;color:#555;">Membership No: ${escapeHtml(mem.membershipNo)}</div>` : ''}
           </div>
           <div class="cv-entry-date">${escapeHtml(mem.period || '')}</div>
         </div>
@@ -2345,8 +2725,10 @@
     `;
 
     // Template 3: Two-Column Minimalist Layout
-    if (templateKey === 'minimal') {
-      const leftSectionKeys = ['skills', 'languages', 'certifications', 'memberships', 'awards'];
+    if (templateKey === 'minimal' || templateKey === 'sidebar') {
+      const leftSectionKeys = templateKey === 'sidebar'
+        ? ['skills', 'languages', 'memberships', 'awards']
+        : ['skills', 'languages', 'certifications', 'memberships', 'awards'];
       const leftColContent = [];
       const rightColContent = [];
 
@@ -2379,7 +2761,7 @@
       `;
     }
 
-    // Template 1 (Modern), Template 2 (Classic), Template 4 (ATS)
+    // Template 1 (Modern), 2 (Classic), 4 (ATS), 5 (Elegant Teal & Gold)
     const bodyContent = visibleSections.map(secKey => renderedSections[secKey] || '').join('');
 
     return `
@@ -2489,42 +2871,59 @@
   function generatePdfForCv(cvData) {
     showFloatingNotification('Compiling professional PDF...');
 
-    // Create a temporary container for PDF compilation matching exact printable area
+    // User page setup (defaults: A4 Portrait, Standard 20 mm margins)
+    const ps = getCvPageSetup(cvData);
+    const geo = getPageGeometry(ps);
+    const m = geo.m;
+    // Safety gutter (mm): the canvas is captured slightly wider than the text column and the
+    // PDF margins are reduced by the same amount, so the text still sits exactly inside the
+    // chosen margins, but glyphs that the canvas renderer draws a little wider than the
+    // browser layout (common with Windows fonts on right-aligned dates) are no longer cut off.
+    const G = Math.max(0, Math.min(4, Math.min(m.left, m.right) - 1));
+    const captureW = Math.round((geo.innerW + 2 * G) * 10) / 10;
+
+    // The content is laid out at exactly the printable width (page width minus left/right
+    // margins), so nothing is scaled, shifted or cropped into the margins.
     const tempContainer = document.createElement('div');
     tempContainer.className = 'cv-pdf-export-host';
     tempContainer.style.position = 'absolute';
     tempContainer.style.left = '-9999px';
     tempContainer.style.top = '0';
-    // Printable width: A4 width (210mm) - Left Margin (15mm) - Right Margin (15mm) = 180mm
-    tempContainer.style.width = '210mm';
+    tempContainer.style.width = `${captureW}mm`;
     tempContainer.style.boxSizing = 'border-box';
     tempContainer.innerHTML = renderCvDocumentHtml(cvData, cvData.template || 'modern');
     document.body.appendChild(tempContainer);
 
     const sheet = tempContainer.querySelector('.cv-a4-sheet');
     if (sheet) {
+      // html2pdf clones only this sheet, so PDF-specific CSS hooks onto a class on the sheet itself
+      sheet.classList.add('cv-pdf-export');
       sheet.style.boxShadow = 'none';
       sheet.style.margin = '0';
-      sheet.style.width = '100%';
-      sheet.style.maxWidth = '210mm';
+      sheet.style.width = `${captureW}mm`;
+      sheet.style.maxWidth = `${captureW}mm`;
       sheet.style.boxSizing = 'border-box';
-      // Reset sheet padding so jsPDF margins govern page spacing consistently.
-      // 3mm top breathing space on page 1, while subsequent pages receive standard 18mm margin.
-      sheet.style.padding = '3mm 0 0 0';
+      // Page margins are applied by jsPDF; the sheet only carries the side gutter, so the
+      // text column is exactly the printable width chosen in Page Setup.
+      sheet.style.padding = `0 ${G}mm`;
       sheet.style.minHeight = 'auto';
+      sheet.style.overflow = 'visible';
     }
 
-    // Remove absolute preview footer so it doesn't overlap text or cause trailing blank page
+    // Remove the on-screen footer; a real footer is drawn inside the bottom margin of each page
     const footers = tempContainer.querySelectorAll('.cv-sheet-footer');
     footers.forEach(f => f.remove());
 
     const filename = `${sanitizeFilename(cvData.title || 'Curriculum_Vitae')}.pdf`;
 
+    const cleanup = () => {
+      if (tempContainer.parentNode) tempContainer.parentNode.removeChild(tempContainer);
+    };
+
     if (window.html2pdf) {
       const opt = {
-        // Standard margins: Top 18mm, Left 15mm, Bottom 16mm, Right 15mm
-        // Ensures subsequent pages after first receive standard 18mm top margin
-        margin: [18, 15, 16, 15],
+        // html2pdf margin order: [top, left, bottom, right] (mm)
+        margin: [m.top, m.left - G, m.bottom, m.right - G],
         filename: filename,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: {
@@ -2535,7 +2934,7 @@
           scrollY: 0,
           logging: false
         },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        jsPDF: { unit: 'mm', format: ps.size, orientation: ps.orientation },
         pagebreak: {
           mode: ['css', 'legacy'],
           before: '.cv-page-break-before, .html2pdf__page-break',
@@ -2550,6 +2949,7 @@
             '.cv-contact-item',
             '.cv-skill-badge',
             '.cv-skill-item',
+            '.cv-entry-reference',
             'h1', 'h2', 'h3', 'h4',
             'p', 'li'
           ]
@@ -2562,58 +2962,59 @@
         .toPdf()
         .get('pdf')
         .then(pdf => {
+          if (!ps.showFooter) return;
           const totalPages = pdf.internal.getNumberOfPages();
           const pageWidth = pdf.internal.pageSize.getWidth();
           const pageHeight = pdf.internal.pageSize.getHeight();
-          const marginX = 15;
-          const footerY = pageHeight - 9;
-          const lineY = footerY - 3;
+          // Footer sits entirely inside the bottom margin, aligned with the side margins
+          const footerY = pageHeight - Math.max(4, m.bottom * 0.42);
+          const lineY = footerY - 3.2;
+          const leftX = m.left;
+          const rightX = pageWidth - m.right;
           const candidateName = (cvData.personal?.fullName || cvData.title || 'Curriculum Vitae').trim();
           const footerLabel = `${candidateName} • Curriculum Vitae`;
 
-          // Add a crisp footer on every page so the reader always knows whose CV it is
           for (let i = 1; i <= totalPages; i++) {
             pdf.setPage(i);
-
-            // Clean subtle divider line
             pdf.setDrawColor(210, 215, 222);
             pdf.setLineWidth(0.2);
-            pdf.line(marginX, lineY, pageWidth - marginX, lineY);
+            pdf.line(leftX, lineY, rightX, lineY);
 
-            // Footer text
             pdf.setFont('helvetica', 'normal');
             pdf.setFontSize(8);
             pdf.setTextColor(115, 120, 130);
-
-            // Left: Candidate Name & CV label
-            pdf.text(footerLabel, marginX, footerY);
-
-            // Right: Page counter if multiple pages, or document marker
+            pdf.text(footerLabel, leftX, footerY);
             const pageStr = totalPages > 1 ? `Page ${i} of ${totalPages}` : 'Curriculum Vitae';
-            pdf.text(pageStr, pageWidth - marginX, footerY, { align: 'right' });
+            pdf.text(pageStr, rightX, footerY, { align: 'right' });
           }
         })
         .save()
         .then(() => {
-          if (tempContainer.parentNode) {
-            tempContainer.parentNode.removeChild(tempContainer);
-          }
-          showFloatingNotification('PDF downloaded successfully!');
+          cleanup();
+          showFloatingNotification(`PDF downloaded (${describePageSetup(ps)})`);
         }).catch(err => {
           console.error('PDF export error:', err);
-          if (tempContainer.parentNode) {
-            tempContainer.parentNode.removeChild(tempContainer);
-          }
-          window.print();
+          cleanup();
+          window.triggerCvPrintPreviewFor(cvData);
         });
     } else {
-      // Fallback to print
-      if (tempContainer.parentNode) {
-        tempContainer.parentNode.removeChild(tempContainer);
-      }
-      window.print();
+      cleanup();
+      window.triggerCvPrintPreviewFor(cvData);
     }
   }
+
+  // Print fallback that honours the same page setup
+  window.triggerCvPrintPreviewFor = function (cvData) {
+    let printArea = document.getElementById('cvPrintArea');
+    if (!printArea) {
+      printArea = document.createElement('div');
+      printArea.id = 'cvPrintArea';
+      document.body.appendChild(printArea);
+    }
+    printArea.innerHTML = renderCvDocumentHtml(cvData, cvData.template || 'modern');
+    applyPrintPageRule(getCvPageSetup(cvData));
+    window.print();
+  };
 
   // ==========================================================================
   // EXPORT 4: Export to MS Word (.doc with native Word styling)
@@ -2637,6 +3038,9 @@
     const visibleSections = (cvData.sectionsOrder || DEFAULT_SECTIONS_ORDER).filter(s => {
       return !(cvData.hiddenSections || []).includes(s);
     });
+    const wordGeo = getPageGeometry(getCvPageSetup(cvData));
+    const toPt = mm => (mm * 72 / 25.4).toFixed(1);
+    const wordLandscape = wordGeo.w > wordGeo.h;
 
     let sectionsWordHtml = '';
 
@@ -2660,6 +3064,7 @@
             `;
             cvData.experience.forEach(exp => {
               const dateStr = exp.startDate ? `${exp.startDate} &ndash; ${exp.current ? 'Present' : (exp.endDate || 'Present')}` : '';
+              const durationStr = (exp.duration || '').trim() || computeDuration(exp.startDate, exp.current ? 'Present' : exp.endDate);
               const bullets = (exp.responsibilities || []).filter(b => b.trim()).map(b => `
                 <li class="bullet">${escapeHtml(b)}</li>
               `).join('');
@@ -2668,11 +3073,12 @@
                 <table class="item-table" width="100%">
                   <tr>
                     <td class="bold-title">${escapeHtml(exp.jobTitle || 'Role')} &bull; ${escapeHtml(exp.organization || '')}</td>
-                    <td class="right-date">${dateStr}</td>
+                    <td class="right-date">${dateStr}${durationStr ? `<br/>(${escapeHtml(durationStr)})` : ''}</td>
                   </tr>
                 </table>
                 <div class="sub-meta">${escapeHtml(exp.location || '')}${exp.location && exp.employmentType ? ' &bull; ' : ''}${escapeHtml(exp.employmentType || '')}</div>
                 ${bullets ? `<ul class="bullet-list">${bullets}</ul>` : ''}
+                ${exp.reference && exp.reference.trim() ? `<div class="sub-meta"><strong>Reference:</strong> ${escapeHtml(exp.reference)}</div>` : ''}
                 <div style="margin-bottom: 8pt;"></div>
               `;
             });
@@ -2729,10 +3135,16 @@
                 <table class="item-table" width="100%">
                   <tr>
                     <td class="bold-title">${escapeHtml(cert.name || '')} &bull; ${escapeHtml(cert.organization || '')}</td>
-                    <td class="right-date">${escapeHtml(cert.issueDate || '')}</td>
+                    <td class="right-date">${escapeHtml(cert.duration || cert.issueDate || '')}</td>
                   </tr>
                 </table>
-                ${cert.credentialId ? `<div class="sub-meta">Credential ID: ${escapeHtml(cert.credentialId)}</div>` : ''}
+                ${(() => {
+                  const m = [];
+                  if (cert.location) m.push(`Location: ${escapeHtml(cert.location)}`);
+                  if (cert.duration && cert.issueDate) m.push(`Completed: ${escapeHtml(cert.issueDate)}`);
+                  if (cert.credentialId) m.push(`Credential ID: ${escapeHtml(cert.credentialId)}`);
+                  return m.length ? `<div class="sub-meta">${m.join(' &bull; ')}</div>` : '';
+                })()}
               `;
             });
           }
@@ -2770,9 +3182,10 @@
                 <table class="item-table" width="100%">
                   <tr>
                     <td class="bold-title">${escapeHtml(award.title || '')} &ndash; ${escapeHtml(award.issuer || '')}</td>
-                    <td class="right-date">${escapeHtml(award.date || '')}</td>
+                    <td class="right-date">${escapeHtml(award.duration || award.date || '')}</td>
                   </tr>
                 </table>
+                ${award.duration && award.date ? `<div class="sub-meta">Awarded: ${escapeHtml(award.date)}</div>` : ''}
                 ${award.description ? `<div class="sub-meta">${escapeHtml(award.description)}</div>` : ''}
               `;
             });
@@ -2814,10 +3227,11 @@
               sectionsWordHtml += `
                 <table class="item-table" width="100%">
                   <tr>
-                    <td class="bold-title">${escapeHtml(mem.organization || '')} (${escapeHtml(mem.role || '')})</td>
+                    <td class="bold-title">${escapeHtml(mem.organization || '')}${mem.role ? ` (${escapeHtml(mem.role)})` : ''}</td>
                     <td class="right-date">${escapeHtml(mem.period || '')}</td>
                   </tr>
                 </table>
+                ${mem.membershipNo ? `<div class="sub-meta">Membership No: ${escapeHtml(mem.membershipNo)}</div>` : ''}
               `;
             });
           }
@@ -2875,8 +3289,9 @@
         <![endif]-->
         <style>
           @page Section1 {
-            size: 595.3pt 841.9pt; /* A4 */
-            margin: 54.0pt 54.0pt 54.0pt 54.0pt; /* 0.75 in */
+            size: ${toPt(wordGeo.w)}pt ${toPt(wordGeo.h)}pt; /* from CV Page Setup */
+            ${wordLandscape ? 'mso-page-orientation: landscape;' : ''}
+            margin: ${toPt(wordGeo.m.top)}pt ${toPt(wordGeo.m.right)}pt ${toPt(wordGeo.m.bottom)}pt ${toPt(wordGeo.m.left)}pt;
             mso-header-margin: 36.0pt;
             mso-footer-margin: 36.0pt;
             mso-paper-source: 0;
@@ -3011,6 +3426,7 @@
     }
 
     printArea.innerHTML = renderCvDocumentHtml(currentCv, currentCv.template || 'modern');
+    applyPrintPageRule(getCvPageSetup(currentCv));
     window.print();
   };
 
@@ -3043,6 +3459,45 @@
   // ==========================================================================
   // Utilities
   // ==========================================================================
+  // Computes a human-readable duration (e.g. "2 yrs 3 mos") from flexible date strings
+  // such as "2021-03", "Mar 2021", "2021" or "Present". Returns '' when not parseable.
+  function computeDuration(start, end) {
+    const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+    function parse(v) {
+      if (!v) return null;
+      const t = String(v).trim().toLowerCase();
+      if (t === 'present' || t === 'current' || t === 'now') {
+        const d = new Date();
+        return { y: d.getFullYear(), m: d.getMonth() };
+      }
+      let mt = t.match(/^(\d{4})[-\/.](\d{1,2})/);
+      if (mt) return { y: +mt[1], m: Math.min(11, Math.max(0, +mt[2] - 1)) };
+      mt = t.match(/^(\d{1,2})[-\/.](\d{4})$/);
+      if (mt) return { y: +mt[2], m: Math.min(11, Math.max(0, +mt[1] - 1)) };
+      mt = t.match(/([a-z]{3})[a-z]*\.?\s*,?\s*(\d{4})/);
+      if (mt && MONTHS.indexOf(mt[1]) >= 0) return { y: +mt[2], m: MONTHS.indexOf(mt[1]) };
+      mt = t.match(/^(\d{4})$/);
+      if (mt) return { y: +mt[1], m: 0 };
+      return null;
+    }
+    const a = parse(start);
+    const b = parse(end || 'Present');
+    if (!a || !b) return '';
+    const yearOnly = v => /^\s*\d{4}\s*$/.test(String(v || ''));
+    if (yearOnly(start) && yearOnly(end)) {
+      const y = b.y - a.y;
+      return y > 0 ? `${y} yr${y > 1 ? 's' : ''}` : '';
+    }
+    let total = (b.y - a.y) * 12 + (b.m - a.m) + 1; // inclusive of start month
+    if (total <= 0) return '';
+    const yrs = Math.floor(total / 12);
+    const mos = total % 12;
+    const parts = [];
+    if (yrs) parts.push(`${yrs} yr${yrs > 1 ? 's' : ''}`);
+    if (mos) parts.push(`${mos} mo${mos > 1 ? 's' : ''}`);
+    return parts.join(' ');
+  }
+
   function escapeHtml(str) {
     if (!str) return '';
     return String(str)

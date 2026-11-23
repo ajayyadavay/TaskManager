@@ -27,11 +27,14 @@ A modern, professional task management web application built with Firebase Fires
 ### Curriculum Vitae (CV) Builder
 - **New CV Menu**: Create, manage, and edit multi-page professional CVs within your group workspace
 - **Visibility Control**: Set visibility to **Private** (creator only) or **Public** (group members) conforming to app rules
-- **Multiple Formats & Templates**: Choose from 4 distinct aesthetics:
+- **Multiple Formats & Templates**: Choose from 6 distinct aesthetics:
   - *Modern Professional*: Sleek typography, primary accents, colored headers, skill badge pills
   - *Classic Academic & Traditional*: Refined serif styling, formal rules, publication citations
   - *Two-Column Minimalist*: Structured dual-column layout separating skills/contact from experience
   - *Clean and Executive*: High-contrast, clean bullet structure optimized for scanning
+  - *Elegant Teal & Gold*: Deep teal header band, gold accents, serif headings, refined single-column flow
+  - *Navy Sidebar Executive*: Navy header with a tinted sidebar for skills, languages, memberships and awards
+- **PDF Export with Page Setup**: Choose paper size (A4, Letter, Legal, A5, A3), portrait/landscape orientation and margins (Standard, Narrow, Moderate, Wide or custom per side). Defaults to A4 Portrait with Standard 20 mm margins; content is laid out at the exact printable width so nothing is cropped into the margins. Settings are saved per CV and can be made your default for new CVs; the live preview, Print and Word export follow the same setup.
 - **12 Comprehensive Sections**:
   - Personal Information
   - Professional Summary

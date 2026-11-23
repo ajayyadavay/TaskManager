@@ -5,8 +5,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Task Manager - Group Collaboration</title>
-  <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="cv.css">
+  <link rel="stylesheet" href="styles.css?v=20261123b">
+  <link rel="stylesheet" href="cv.css?v=20261123b">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
@@ -521,6 +521,8 @@
                     <option value="classic">Classic Academic & Traditional</option>
                     <option value="minimal">Two-Column Minimalist</option>
                     <option value="ats">Clean and Executive</option>
+                    <option value="elegant">Elegant Teal &amp; Gold</option>
+                    <option value="sidebar">Navy Sidebar Executive</option>
                   </select>
                 </div>
               </div>
@@ -558,6 +560,8 @@
                       <option value="classic">Classic Academic & Traditional</option>
                       <option value="minimal">Two-Column Minimalist</option>
                       <option value="ats">Clean and Executive</option>
+                      <option value="elegant">Elegant Teal &amp; Gold</option>
+                      <option value="sidebar">Navy Sidebar Executive</option>
                     </select>
                   </div>
                   <div style="display: flex; align-items: center; gap: 0.35rem;">
@@ -581,9 +585,14 @@
                     title="Save as *.cv format">
                     <i class="fas fa-download"></i> *.cv
                   </button>
-                  <!--<button class="btn secondary-btn small-btn" onclick="window.exportCurrentCvPdf()" title="Export Crisp A4 PDF">
+                  <button class="btn secondary-btn small-btn" onclick="window.exportCurrentCvPdf()"
+                    title="Export PDF using the current Page Setup">
                     <i class="fas fa-file-pdf"></i> PDF
-                  </button> -->
+                  </button>
+                  <button class="btn secondary-btn small-btn" onclick="window.openCvPageSetup()"
+                    title="PDF Page Setup: paper size, orientation and margins">
+                    <i class="fas fa-sliders"></i> Page Setup
+                  </button>
                   <button class="btn secondary-btn small-btn" onclick="window.exportCurrentCvWord()"
                     title="Export MS Word Document">
                     <i class="fas fa-file-word"></i> Word
@@ -629,11 +638,13 @@
                       <button class="cv-zoom-btn" onclick="window.cvZoomReset()" title="100% Zoom">100%</button>
                     </div>
 
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                      <span style="font-size: 0.75rem; color: var(--gray-500); font-weight: 500;">
+                    <div class="cv-preview-toolbar-right">
+                      <button type="button" id="cvPageSetupBadge" class="cv-page-setup-badge"
+                        onclick="window.openCvPageSetup()" title="Change paper size, orientation and margins">A4 · Portrait · Standard margins</button>
+                      <span class="cv-live-label" style="font-size: 0.75rem; color: var(--gray-500); font-weight: 500;">
                         <i class="fas fa-bolt" style="color: #eab308;"></i> Live Preview
                       </span>
-                      <button class="btn secondary-btn small-btn" onclick="window.triggerCvPrintPreview()">
+                      <button class="btn secondary-btn small-btn cv-print-preview-btn" onclick="window.triggerCvPrintPreview()">
                         <i class="fas fa-print"></i> Print Preview
                       </button>
                     </div>
@@ -1026,6 +1037,11 @@
       <div class="themed-dialog-body">
         <h3 class="themed-dialog-title" id="themedDialogTitle">Notice</h3>
         <p class="themed-dialog-message" id="themedDialogMessage"></p>
+        <div class="themed-dialog-input-group hidden" id="themedDialogInputGroup">
+          <label class="themed-dialog-input-label" id="themedDialogInputLabel" for="themedDialogInput"></label>
+          <input type="text" class="themed-dialog-input" id="themedDialogInput" autocomplete="off">
+          <div class="themed-dialog-input-error hidden" id="themedDialogInputError"></div>
+        </div>
       </div>
       <div class="themed-dialog-actions" id="themedDialogActions">
         <button type="button" class="btn secondary-btn themed-dialog-cancel-btn hidden" id="themedDialogCancelBtn">Cancel</button>
@@ -1040,8 +1056,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
   <!-- Keep html2pdf for notes export if needed -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-  <script src="cv.js"></script>
-  <script src="app.js"></script>
+  <script src="cv.js?v=20261123b"></script>
+  <script src="app.js?v=20261123b"></script>
 </body>
 
 </html>
