@@ -2495,3 +2495,298 @@ body {
         grid-template-columns:1fr;
     }
 }
+
+/* ==========================================================================
+   Trash Bin Styles
+   ========================================================================== */
+.trash-card {
+  background: white;
+  border-radius: var(--radius-xl, 12px);
+  border: 1px solid var(--gray-200, #e5e7eb);
+  padding: 1.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.trash-card:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.trash-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.trash-card-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--gray-900, #111827);
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+.trash-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.trash-badge.task { background: #e0e7ff; color: #4338ca; }
+.trash-badge.issue { background: #fee2e2; color: #b91c1c; }
+.trash-badge.punchList { background: #fef3c7; color: #92400e; }
+.trash-badge.note { background: #ecfdf5; color: #047857; }
+.trash-badge.cv { background: #f3e8ff; color: #7e22ce; }
+.trash-badge.category { background: #e0f2fe; color: #0369a1; }
+.trash-badge.project { background: #fce7f3; color: #be185d; }
+
+.trash-card-meta {
+  font-size: 0.8rem;
+  color: var(--gray-500, #6b7280);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.trash-countdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-weight: 500;
+  color: #d97706;
+}
+
+.trash-countdown.warning {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.trash-card-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: auto;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--gray-100, #f3f4f6);
+}
+
+.trash-card-actions .btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  padding: 0.45rem 0.6rem;
+}
+
+.trash-filter-btn.active {
+  background: var(--primary-600, #4f46e5) !important;
+  color: white !important;
+  border-color: var(--primary-600, #4f46e5) !important;
+}
+
+.trash-empty-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 3.5rem 1rem;
+  color: var(--gray-400, #9ca3af);
+}
+
+.trash-empty-state i {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  color: var(--gray-300, #d1d5db);
+}
+
+/* ==========================================================================
+   Themed Alert & Confirm Dialogue Box
+   ========================================================================== */
+.themed-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  padding: 1.25rem;
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}
+
+.themed-dialog-overlay.hidden {
+  display: none !important;
+}
+
+.themed-dialog-box {
+  background: #ffffff;
+  border-radius: var(--radius-xl, 1rem);
+  width: 100%;
+  max-width: 440px;
+  padding: 1.75rem;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 1.25rem;
+  animation: dialogScaleIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes dialogScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.themed-dialog-icon-wrapper {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  margin-bottom: -0.25rem;
+}
+
+.themed-dialog-icon-wrapper.info {
+  background: var(--primary-100, #eef2ff);
+  color: var(--primary-600, #4f46e5);
+}
+
+.themed-dialog-icon-wrapper.success {
+  background: #ecfdf5;
+  color: #10b981;
+}
+
+.themed-dialog-icon-wrapper.warning {
+  background: #fffbeb;
+  color: #f59e0b;
+}
+
+.themed-dialog-icon-wrapper.danger {
+  background: #fef2f2;
+  color: #ef4444;
+}
+
+.themed-dialog-body {
+  width: 100%;
+}
+
+.themed-dialog-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--gray-900, #111827);
+  margin-bottom: 0.5rem;
+  line-height: 1.3;
+}
+
+.themed-dialog-message {
+  font-size: 0.925rem;
+  color: var(--gray-600, #4b5563);
+  line-height: 1.55;
+  word-break: break-word;
+  max-height: 55vh;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+.themed-dialog-actions {
+  display: flex;
+  gap: 0.75rem;
+  width: 100%;
+  justify-content: center;
+}
+
+.themed-dialog-actions .btn {
+  flex: 1;
+  padding: 0.65rem 1.25rem;
+  font-size: 0.925rem;
+  font-weight: 600;
+  border-radius: 0.625rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.themed-dialog-confirm-btn {
+  background: var(--primary-600, #4f46e5);
+  color: #ffffff;
+  border: none;
+}
+
+.themed-dialog-confirm-btn:hover {
+  background: var(--primary-700, #4338ca);
+}
+
+.themed-dialog-confirm-btn.danger {
+  background: #dc2626 !important;
+  color: #ffffff !important;
+}
+
+.themed-dialog-confirm-btn.danger:hover {
+  background: #b91c1c !important;
+}
+
+.themed-dialog-cancel-btn {
+  background: #f3f4f6;
+  color: #4b5563;
+  border: 1px solid #e5e7eb;
+}
+
+.themed-dialog-cancel-btn:hover {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+/* ==========================================================================
+   Netlify Badge & Collaborative Drawer Suppression
+   ========================================================================== */
+#nl-badge-frame,
+iframe#nl-badge-frame,
+iframe[src*="netlify"],
+iframe[title*="Netlify" i],
+#netlify-badge,
+.netlify-badge,
+[data-netlify-badge],
+netlify-badge,
+[data-netlify-drawer],
+netlify-drawer {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    position: absolute !important;
+    left: -99999px !important;
+    top: -99999px !important;
+    width: 0 !important;
+    height: 0 !important;
+    clip: rect(0, 0, 0, 0) !important;
+    z-index: -99999 !important;
+}

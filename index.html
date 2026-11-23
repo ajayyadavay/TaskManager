@@ -143,6 +143,7 @@
           <button class="nav-item" data-section="cv">CV</button>
           <button id="adminNavUsers" class="nav-item hidden" data-section="users">Users</button>
           <button id="adminNavProject" class="nav-item hidden" data-section="projects">Project</button>
+          <button class="nav-item" data-section="trash"><i class="fas fa-trash-alt" style="margin-right:4px;"></i>Trash</button>
         </aside>
 
         <main class="main-content">
@@ -559,6 +560,16 @@
                       <option value="ats">Clean and Executive</option>
                     </select>
                   </div>
+                  <div style="display: flex; align-items: center; gap: 0.35rem;">
+                    <label for="cvDocAutoSave"
+                      style="font-size: 0.8rem; font-weight: 600; color: var(--gray-700);">Auto-save:</label>
+                    <select id="cvDocAutoSave" onchange="window.onCvAutoSaveChange()"
+                      style="font-size: 0.85rem; padding: 0.35rem 0.6rem; border-radius: var(--radius-md); border: 1px solid var(--gray-300);">
+                      <option value="on" selected>On (Default)</option>
+                      <option value="off">Off</option>
+                    </select>
+                    <span id="cvAutoSaveStatus" style="font-size: 0.75rem; color: var(--gray-500); margin-left: 2px;"></span>
+                  </div>
                 </div>
 
                 <div class="cv-top-bar-actions">
@@ -665,6 +676,33 @@
               </div>
               <div id="projectsList" class="users-grid"></div>
             </div>
+          </section>
+
+          <!-- Trash Section -->
+          <section id="trashSection" class="section hidden">
+            <div class="section-header">
+              <h2><i class="fas fa-trash-alt" style="margin-right:8px; color:var(--gray-400);"></i>Trash</h2>
+              <div style="display:flex; gap:0.5rem; align-items:center;">
+                <span id="trashItemCount" style="color:var(--gray-500); font-size:0.85rem;"></span>
+                <button class="btn secondary-btn" onclick="window.emptyTrash()" title="Permanently delete all items">
+                  <i class="fas fa-dumpster-fire"></i> Empty Trash
+                </button>
+              </div>
+            </div>
+            <p style="color:var(--gray-500); font-size:0.85rem; margin-bottom:1rem;">
+              <i class="fas fa-info-circle"></i> Items are automatically deleted after 30 days. You can restore or permanently delete them anytime.
+            </p>
+            <div style="margin-bottom:1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+              <button class="btn secondary-btn small-btn trash-filter-btn active" data-trash-filter="all" onclick="window.filterTrash('all')">All</button>
+              <button class="btn secondary-btn small-btn trash-filter-btn" data-trash-filter="task" onclick="window.filterTrash('task')">Tasks</button>
+              <button class="btn secondary-btn small-btn trash-filter-btn" data-trash-filter="issue" onclick="window.filterTrash('issue')">Issues</button>
+              <button class="btn secondary-btn small-btn trash-filter-btn" data-trash-filter="punchList" onclick="window.filterTrash('punchList')">Punch Lists</button>
+              <button class="btn secondary-btn small-btn trash-filter-btn" data-trash-filter="note" onclick="window.filterTrash('note')">Notes</button>
+              <button class="btn secondary-btn small-btn trash-filter-btn" data-trash-filter="cv" onclick="window.filterTrash('cv')">CVs</button>
+              <button class="btn secondary-btn small-btn trash-filter-btn" data-trash-filter="category" onclick="window.filterTrash('category')">Categories</button>
+              <button class="btn secondary-btn small-btn trash-filter-btn" data-trash-filter="project" onclick="window.filterTrash('project')">Projects</button>
+            </div>
+            <div id="trashList" class="users-grid" style="gap:0.75rem;"></div>
           </section>
         </main>
       </div>
@@ -828,24 +866,36 @@
   <div id="punchListModal" class="modal hidden">
     <div class="modal-content large-modal">
       <span class="close-btn">&times;</span>
-      <h3 id="punchListModalTitle">Create New Punch List</h3>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h3 id="punchListModalTitle" style="margin-bottom: 0;">Create New Punch List</h3>
+        <span id="punchListAutoSaveStatus" style="font-size: 0.8rem; color: var(--gray-500);"></span>
+      </div>
       <form id="punchListForm">
         <input type="hidden" id="punchListId">
         <input type="hidden" id="punchListFromTaskId">
-        <div class="input-group">
-          <label for="punchListName">Punch List Name</label>
-          <input type="text" id="punchListName" required placeholder="Enter punch list name">
+        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem;">
+          <div class="input-group">
+            <label for="punchListName">Punch List Name</label>
+            <input type="text" id="punchListName" required placeholder="Enter punch list name">
+          </div>
+          <div class="input-group">
+            <label for="punchListVisibility">Visibility</label>
+            <select id="punchListVisibility">
+              <option value="public">Public</option>
+              <option value="private">Private</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label for="punchListAutoSave">Auto-save</label>
+            <select id="punchListAutoSave">
+              <option value="on" selected>On (Default)</option>
+              <option value="off">Off</option>
+            </select>
+          </div>
         </div>
         <div class="input-group">
           <label for="punchListDescription">Description</label>
           <textarea id="punchListDescription" rows="4" placeholder="Enter description"></textarea>
-        </div>
-        <div class="input-group">
-          <label for="punchListVisibility">Visibility</label>
-          <select id="punchListVisibility">
-            <option value="public">Public</option>
-            <option value="private">Private</option>
-          </select>
         </div>
         <hr style="border: none; border-top: 1px solid var(--gray-200); margin: 1.5rem 0;">
         <h4 style="margin-bottom: 1rem;">Checklist Items</h4>
@@ -884,19 +934,31 @@
   <div id="noteModal" class="modal hidden">
     <div class="modal-content extra-large-modal">
       <span class="close-btn">&times;</span>
-      <h3 id="noteModalTitle">Create New Note</h3>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h3 id="noteModalTitle" style="margin-bottom: 0;">Create New Note</h3>
+        <span id="noteAutoSaveStatus" style="font-size: 0.8rem; color: var(--gray-500);"></span>
+      </div>
       <form id="noteForm">
         <input type="hidden" id="noteId">
-        <div class="input-group">
-          <label for="noteName">Note Name</label>
-          <input type="text" id="noteName" required placeholder="Enter note name">
-        </div>
-        <div class="input-group">
-          <label for="noteVisibility">Visibility</label>
-          <select id="noteVisibility">
-            <option value="private">Private (Default)</option>
-            <option value="public">Public</option>
-          </select>
+        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem;">
+          <div class="input-group">
+            <label for="noteName">Note Name</label>
+            <input type="text" id="noteName" required placeholder="Enter note name">
+          </div>
+          <div class="input-group">
+            <label for="noteVisibility">Visibility</label>
+            <select id="noteVisibility">
+              <option value="private">Private (Default)</option>
+              <option value="public">Public</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label for="noteAutoSave">Auto-save</label>
+            <select id="noteAutoSave">
+              <option value="on" selected>On (Default)</option>
+              <option value="off">Off</option>
+            </select>
+          </div>
         </div>
         <!-- Text Editor Toolbar -->
         <div class="editor-toolbar">
@@ -954,6 +1016,24 @@
       <div id="viewNoteContent"></div>
     </div>
   </div>
+
+  <!-- Themed Dialogue Modal (Alert & Confirm) -->
+  <div id="themedDialogModal" class="themed-dialog-overlay hidden">
+    <div class="themed-dialog-box" role="dialog" aria-modal="true" aria-labelledby="themedDialogTitle">
+      <div class="themed-dialog-icon-wrapper info" id="themedDialogIconWrapper">
+        <i class="fas fa-info-circle" id="themedDialogIcon"></i>
+      </div>
+      <div class="themed-dialog-body">
+        <h3 class="themed-dialog-title" id="themedDialogTitle">Notice</h3>
+        <p class="themed-dialog-message" id="themedDialogMessage"></p>
+      </div>
+      <div class="themed-dialog-actions" id="themedDialogActions">
+        <button type="button" class="btn secondary-btn themed-dialog-cancel-btn hidden" id="themedDialogCancelBtn">Cancel</button>
+        <button type="button" class="btn primary-btn themed-dialog-confirm-btn" id="themedDialogConfirmBtn">OK</button>
+      </div>
+    </div>
+  </div>
+
   <!-- jsPDF for true text-based PDF generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <!-- AutoTable for tables and layout -->

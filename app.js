@@ -1,3 +1,221 @@
+// Automatically suppress Netlify injected badge / drawer
+(function() {
+  function removeNetlifyBadge() {
+    const targets = document.querySelectorAll(
+      '#nl-badge-frame, iframe#nl-badge-frame, iframe[src*="netlify"], iframe[title*="Netlify" i], #netlify-badge, .netlify-badge, [data-netlify-badge], netlify-badge, [data-netlify-drawer], netlify-drawer'
+    );
+    targets.forEach(el => el.remove());
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', removeNetlifyBadge);
+  } else {
+    removeNetlifyBadge();
+  }
+
+  try {
+    const observer = new MutationObserver(mutations => {
+      for (const m of mutations) {
+        for (const node of m.addedNodes) {
+          if (node.nodeType === 1) {
+            const tag = node.tagName || '';
+            const id = node.id || '';
+            const cls = typeof node.className === 'string' ? node.className : '';
+            if (
+              id === 'nl-badge-frame' ||
+              id === 'netlify-badge' ||
+              tag === 'NETLIFY-BADGE' ||
+              tag === 'NETLIFY-DRAWER' ||
+              node.hasAttribute('data-netlify-badge') ||
+              node.hasAttribute('data-netlify-drawer') ||
+              (tag === 'IFRAME' && (
+                (node.src && node.src.includes('netlify')) ||
+                (node.title && /netlify/i.test(node.title)) ||
+                /netlify/i.test(id) ||
+                /netlify/i.test(cls)
+              ))
+            ) {
+              node.remove();
+            }
+          }
+        }
+      }
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+  } catch (err) {}
+})();
+
+// ==========================================================================
+// Themed Dialogue Box System (Overrides window.alert & adds customConfirm)
+// ==========================================================================
+let _dialogResolve = null;
+
+function showThemedDialog({
+  title,
+  message,
+  type = 'info',
+  confirmText = 'OK',
+  cancelText = null,
+  isDanger = false
+}) {
+  return new Promise((resolve) => {
+    _dialogResolve = resolve;
+
+    const overlay = document.getElementById('themedDialogModal');
+    const iconWrapper = document.getElementById('themedDialogIconWrapper');
+    const icon = document.getElementById('themedDialogIcon');
+    const titleEl = document.getElementById('themedDialogTitle');
+    const messageEl = document.getElementById('themedDialogMessage');
+    const confirmBtn = document.getElementById('themedDialogConfirmBtn');
+    const cancelBtn = document.getElementById('themedDialogCancelBtn');
+
+    if (!overlay) {
+      if (cancelText) {
+        resolve(window._nativeConfirm ? window._nativeConfirm(message) : true);
+      } else {
+        if (window._nativeAlert) window._nativeAlert(message);
+        resolve(true);
+      }
+      return;
+    }
+
+    const strMsg = String(message ?? '');
+    const lowerMsg = strMsg.toLowerCase();
+    let detectedType = type;
+    let detectedTitle = title;
+
+    if (!title) {
+      if (lowerMsg.includes('error') || lowerMsg.includes('failed') || lowerMsg.includes('cannot') || lowerMsg.includes('invalid') || lowerMsg.includes('permission denied')) {
+        detectedType = 'danger';
+        detectedTitle = 'Error';
+      } else if (lowerMsg.includes('success') || lowerMsg.includes('saved') || lowerMsg.includes('restored') || lowerMsg.includes('created') || lowerMsg.includes('updated') || lowerMsg.includes('invited') || lowerMsg.includes('copied')) {
+        detectedType = 'success';
+        detectedTitle = 'Success';
+      } else if (lowerMsg.includes('please') || lowerMsg.includes('required') || lowerMsg.includes('warning') || lowerMsg.includes('sure') || lowerMsg.includes('trash') || lowerMsg.includes('delete') || lowerMsg.includes('archive')) {
+        detectedType = 'warning';
+        detectedTitle = cancelText ? 'Please Confirm' : 'Notice';
+      } else {
+        detectedType = 'info';
+        detectedTitle = 'Notice';
+      }
+    }
+
+    if (iconWrapper && icon) {
+      iconWrapper.className = 'themed-dialog-icon-wrapper ' + detectedType;
+      if (detectedType === 'success') {
+        icon.className = 'fas fa-check-circle';
+      } else if (detectedType === 'danger') {
+        icon.className = 'fas fa-exclamation-circle';
+      } else if (detectedType === 'warning') {
+        icon.className = 'fas fa-exclamation-triangle';
+      } else {
+        icon.className = 'fas fa-info-circle';
+      }
+    }
+
+    if (titleEl) titleEl.textContent = detectedTitle;
+    if (messageEl) messageEl.textContent = strMsg;
+
+    if (confirmBtn) {
+      confirmBtn.textContent = confirmText || 'OK';
+      if (isDanger || lowerMsg.includes('delete') || lowerMsg.includes('remove') || lowerMsg.includes('empty') || lowerMsg.includes('trash')) {
+        confirmBtn.classList.add('danger');
+      } else {
+        confirmBtn.classList.remove('danger');
+      }
+    }
+
+    if (cancelBtn) {
+      if (cancelText) {
+        cancelBtn.textContent = cancelText;
+        cancelBtn.classList.remove('hidden');
+      } else {
+        cancelBtn.classList.add('hidden');
+      }
+    }
+
+    overlay.classList.remove('hidden');
+    setTimeout(() => confirmBtn?.focus(), 50);
+  });
+}
+
+function closeThemedDialog(result) {
+  const overlay = document.getElementById('themedDialogModal');
+  if (overlay) {
+    overlay.classList.add('hidden');
+  }
+  if (_dialogResolve) {
+    const res = _dialogResolve;
+    _dialogResolve = null;
+    res(result);
+  }
+}
+
+// Global window.alert replacement
+window._nativeAlert = window._nativeAlert || window.alert;
+window.alert = function(message, customTitle) {
+  return showThemedDialog({
+    title: customTitle,
+    message: message,
+    confirmText: 'OK'
+  });
+};
+
+// Global window.customConfirm helper
+window._nativeConfirm = window._nativeConfirm || window.confirm;
+window.customConfirm = function(message, options = {}) {
+  return showThemedDialog({
+    title: options.title,
+    message: message,
+    type: options.type || 'warning',
+    confirmText: options.confirmText || 'Confirm',
+    cancelText: options.cancelText || 'Cancel',
+    isDanger: options.isDanger !== false
+  });
+};
+
+function setupThemedDialogEvents() {
+  const overlay = document.getElementById('themedDialogModal');
+  const confirmBtn = document.getElementById('themedDialogConfirmBtn');
+  const cancelBtn = document.getElementById('themedDialogCancelBtn');
+
+  confirmBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeThemedDialog(true);
+  });
+
+  cancelBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeThemedDialog(false);
+  });
+
+  overlay?.addEventListener('click', (e) => {
+    if (e.target === overlay) {
+      const cancelVisible = cancelBtn && !cancelBtn.classList.contains('hidden');
+      closeThemedDialog(cancelVisible ? false : true);
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (overlay && !overlay.classList.contains('hidden')) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        const cancelVisible = cancelBtn && !cancelBtn.classList.contains('hidden');
+        closeThemedDialog(cancelVisible ? false : true);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        closeThemedDialog(true);
+      }
+    }
+  });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setupThemedDialogEvents);
+} else {
+  setupThemedDialogEvents();
+}
+
 // TODO: Replace with your Firebase config
 
 const firebaseConfig = {
@@ -27,6 +245,9 @@ let categoriesCache = [];
 let projectsCache = [];
 let punchListsCache = [];
 let notesCache = [];
+let trashCache = [];
+let activeTrashFilter = 'all';
+window.trashCache = trashCache;
 let deadlineOperator = '=';
 
 const FINISHED_TASK_STATUSES = new Set(['completed', 'closed', 'rejected']);
@@ -171,6 +392,10 @@ function setupEventListeners() {
           window.loadCVs();
         }
       }
+
+      if (section === 'trash') {
+        renderTrashList();
+      }
     });
   });
 
@@ -205,6 +430,34 @@ function setupEventListeners() {
   document.getElementById('punchListForm')?.addEventListener('submit', handleSavePunchList);
   document.getElementById('noteForm')?.addEventListener('submit', handleSaveNote);
   document.getElementById('confirmTransferAdminBtn')?.addEventListener('click', confirmTransferAdmin);
+
+  // --- Auto-save listeners: Note ---
+  document.getElementById('noteName')?.addEventListener('input', triggerNoteAutoSave);
+  document.getElementById('noteVisibility')?.addEventListener('change', triggerNoteAutoSave);
+  document.getElementById('noteDescription')?.addEventListener('input', triggerNoteAutoSave);
+  document.getElementById('noteAutoSave')?.addEventListener('change', () => {
+    updateNoteAutoSaveStatusUI();
+    if (document.getElementById('noteAutoSave')?.value === 'on') {
+      triggerNoteAutoSave();
+    } else if (noteAutoSaveTimer) {
+      clearTimeout(noteAutoSaveTimer);
+      noteAutoSaveTimer = null;
+    }
+  });
+
+  // --- Auto-save listeners: Punch List ---
+  document.getElementById('punchListName')?.addEventListener('input', triggerPunchListAutoSave);
+  document.getElementById('punchListDescription')?.addEventListener('input', triggerPunchListAutoSave);
+  document.getElementById('punchListVisibility')?.addEventListener('change', triggerPunchListAutoSave);
+  document.getElementById('punchListAutoSave')?.addEventListener('change', () => {
+    updatePunchListAutoSaveStatusUI();
+    if (document.getElementById('punchListAutoSave')?.value === 'on') {
+      triggerPunchListAutoSave();
+    } else if (punchListAutoSaveTimer) {
+      clearTimeout(punchListAutoSaveTimer);
+      punchListAutoSaveTimer = null;
+    }
+  });
 
   // User profile dropdown
   document.getElementById('userProfile').addEventListener('click', (e) => {
@@ -804,7 +1057,7 @@ async function loadUserGroups(searchTerm = '') {
 }
 
 async function deleteGroup(groupId) {
-  if (!confirm(`Are you sure you want to delete the group "${groupId}"? This cannot be undone!`)) {
+  if (!await customConfirm(`Are you sure you want to delete the group "${groupId}"? This cannot be undone!`, { confirmText: 'Delete Group', type: 'danger', isDanger: true })) {
     return;
   }
 
@@ -1044,6 +1297,21 @@ function setupRealtimeListeners() {
       });
   }
   
+  // Listen for trash changes
+  db.collection('groups').doc(currentGroup).collection('trash')
+    .onSnapshot(snapshot => {
+      trashCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      window.trashCache = trashCache;
+      trashCache.sort((a, b) => (b.deletedTimestamp || 0) - (a.deletedTimestamp || 0));
+      updateTrashBadgeCount();
+      if (!document.getElementById('trashSection').classList.contains('hidden')) {
+        renderTrashList();
+      }
+      cleanupExpiredTrash(trashCache);
+    }, err => {
+      console.warn('Realtime trash listener error:', err);
+    });
+
   // Listen for notifications for the current user
   if (unsubscribeNotifications) unsubscribeNotifications();
   unsubscribeNotifications = db.collection('groups').doc(currentGroup)
@@ -1125,7 +1393,7 @@ async function handleNotificationClick(notificationId, taskId) {
 }
 
 async function clearAllNotifications() {
-  if (!confirm('Are you sure you want to clear all notifications?')) return;
+  if (!await customConfirm('Are you sure you want to clear all notifications?', { confirmText: 'Clear All', type: 'warning' })) return;
   
   const snapshot = await db.collection('groups').doc(currentGroup)
     .collection('users').doc(currentUser.email)
@@ -1392,6 +1660,8 @@ async function handleLogout() {
   punchListsCache = [];
   notesCache = [];
   window.cvsCache = [];
+  trashCache = [];
+  window.trashCache = [];
   showLogin();
 }
 
@@ -2384,17 +2654,19 @@ window.rejectTask = async function(taskId) {
 }
 
 window.deleteTask = async function(taskId) {
-  if (!confirm('Are you sure you want to delete this task? This cannot be undone!')) {
+  const task = tasksCache.find(t => t.id === taskId);
+  const taskDesc = task?.taskId ? `${task.taskId}: ${task.description || ''}` : (task?.description || 'Task');
+  if (!await customConfirm(`Move "${taskDesc.substring(0, 50)}" to Trash? (You can restore it within 30 days)`)) {
     return;
   }
 
   try {
-    await db.collection('groups').doc(currentGroup).collection('tasks').doc(taskId).delete();
-    alert('Task deleted successfully!');
-    document.getElementById('viewTaskModal').classList.add('hidden');
+    await moveToTrash('tasks', taskId, 'task', 'Task', taskDesc, task || {});
+    alert('Task moved to Trash.');
+    document.getElementById('viewTaskModal')?.classList.add('hidden');
   } catch (error) {
     console.error('Delete task error:', error);
-    alert('Failed to delete task: ' + error.message);
+    alert('Failed to move task to trash: ' + error.message);
   }
 }
 
@@ -2441,16 +2713,18 @@ window.extendTaskDeadline = async function(taskId) {
 }
 
 async function deleteIssue(issueId) {
-  if (!confirm('Are you sure you want to delete this issue? This cannot be undone!')) {
+  const issue = issuesCache.find(i => i.id === issueId);
+  const issueDesc = issue?.issueId ? `${issue.issueId}: ${issue.description || ''}` : (issue?.description || 'Issue');
+  if (!await customConfirm(`Move "${issueDesc.substring(0, 50)}" to Trash? (You can restore it within 30 days)`)) {
     return;
   }
 
   try {
-    await db.collection('groups').doc(currentGroup).collection('issues').doc(issueId).delete();
-    alert('Issue deleted successfully!');
+    await moveToTrash('issues', issueId, 'issue', 'Issue', issueDesc, issue || {});
+    alert('Issue moved to Trash.');
   } catch (error) {
     console.error('Delete issue error:', error);
-    alert('Failed to delete issue: ' + error.message);
+    alert('Failed to move issue to trash: ' + error.message);
   }
 }
 
@@ -2458,6 +2732,111 @@ async function deleteIssue(issueId) {
 // Punch List Functions
 // ------------------------------
 let currentPunchListItems = [];
+let punchListAutoSaveTimer = null;
+let isPunchListAutoSaving = false;
+
+function updatePunchListAutoSaveStatusUI(customHtml) {
+  const statusEl = document.getElementById('punchListAutoSaveStatus');
+  if (!statusEl) return;
+  if (customHtml) {
+    statusEl.innerHTML = customHtml;
+    return;
+  }
+  const autoSaveEl = document.getElementById('punchListAutoSave');
+  if (autoSaveEl && autoSaveEl.value === 'off') {
+    statusEl.innerHTML = '<span style="color:var(--gray-400);"><i class="fas fa-pause-circle"></i> Off</span>';
+  } else {
+    statusEl.innerHTML = '<span style="color:var(--gray-500);"><i class="fas fa-check-circle" style="color:#10b981;"></i> Auto-save: On</span>';
+  }
+}
+
+function triggerPunchListAutoSave() {
+  const autoSaveEl = document.getElementById('punchListAutoSave');
+  if (!autoSaveEl || autoSaveEl.value !== 'on') return;
+
+  const name = document.getElementById('punchListName')?.value?.trim();
+  if (!name) {
+    updatePunchListAutoSaveStatusUI('<span style="color:var(--gray-400);">Name required to auto-save</span>');
+    return;
+  }
+
+  updatePunchListAutoSaveStatusUI('<span style="color:var(--primary-600);"><i class="fas fa-circle-notch fa-spin"></i> Saving...</span>');
+
+  if (punchListAutoSaveTimer) clearTimeout(punchListAutoSaveTimer);
+  punchListAutoSaveTimer = setTimeout(async () => {
+    if (isPunchListAutoSaving) return;
+    const currentName = document.getElementById('punchListName')?.value?.trim();
+    if (!currentName || document.getElementById('punchListAutoSave')?.value !== 'on') return;
+
+    const description = document.getElementById('punchListDescription')?.value?.trim() || '';
+    const visibility = document.getElementById('punchListVisibility')?.value || 'public';
+    let punchListId = document.getElementById('punchListId')?.value;
+    const fromTaskId = document.getElementById('punchListFromTaskId')?.value || '';
+
+    const now = new Date();
+    const date = now.toISOString().split('T')[0];
+    const time = now.toTimeString().split(' ')[0].substring(0, 5);
+
+    try {
+      isPunchListAutoSaving = true;
+      if (punchListId) {
+        // Update existing punch list
+        await db.collection('groups').doc(currentGroup).collection('punchLists').doc(punchListId).update({
+          name: currentName,
+          description,
+          visibility,
+          autoSave: true,
+          items: currentPunchListItems,
+          lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          lastUpdatedDate: date,
+          lastUpdatedTime: time
+        });
+      } else {
+        // Create new punch list
+        let nextNumber = 1;
+        const maxPunchList = punchListsCache.reduce((max, pl) => {
+          if (pl.punchListId && pl.punchListId.startsWith('PL-')) {
+            const num = parseInt(pl.punchListId.slice(3), 10);
+            return num > max ? num : max;
+          }
+          return max;
+        }, 0);
+        nextNumber = maxPunchList + 1;
+        const newPunchListId = 'PL-' + String(nextNumber).padStart(6, '0');
+
+        const docRef = await db.collection('groups').doc(currentGroup).collection('punchLists').add({
+          punchListId: newPunchListId,
+          name: currentName,
+          description,
+          visibility,
+          autoSave: true,
+          taskId: fromTaskId || null,
+          items: currentPunchListItems,
+          createdBy: currentUser.email,
+          createdDate: date,
+          createdTime: time,
+          lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          lastUpdatedDate: date,
+          lastUpdatedTime: time,
+          status: 'active',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Set the id so subsequent auto-saves update rather than duplicate!
+        document.getElementById('punchListId').value = docRef.id;
+        document.getElementById('punchListModalTitle').textContent = 'Edit Punch List';
+      }
+
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      updatePunchListAutoSaveStatusUI(`<span style="color:#10b981;" title="Auto-saved to cloud"><i class="fas fa-check-circle"></i> Saved ${timeStr}</span>`);
+    } catch (err) {
+      console.warn('Punch list auto-save error:', err);
+      updatePunchListAutoSaveStatusUI('<span style="color:#ef4444;"><i class="fas fa-exclamation-triangle"></i> Save error</span>');
+    } finally {
+      isPunchListAutoSaving = false;
+    }
+  }, 1200);
+}
 
 function openPunchListModal(taskId = null) {
   document.getElementById('punchListModalTitle').textContent = 'Create New Punch List';
@@ -2466,6 +2845,12 @@ function openPunchListModal(taskId = null) {
   document.getElementById('punchListFromTaskId').value = taskId || '';
   currentPunchListItems = [];
   renderPunchListItemsInForm();
+
+  const autoSaveEl = document.getElementById('punchListAutoSave');
+  if (autoSaveEl) {
+    autoSaveEl.value = 'on'; // default ON for each newly created punch list
+  }
+  updatePunchListAutoSaveStatusUI('<span style="color:var(--gray-500);"><i class="fas fa-bolt" style="color:#eab308;"></i> Auto-save: On (Default)</span>');
 
   // Auto-fill name and description if taskId is provided
   if (taskId) {
@@ -2497,6 +2882,13 @@ function openEditPunchListModal(punchListId) {
   document.getElementById('punchListName').value = punchList.name;
   document.getElementById('punchListDescription').value = punchList.description || '';
   document.getElementById('punchListVisibility').value = punchList.visibility || 'public';
+
+  const autoSaveEl = document.getElementById('punchListAutoSave');
+  if (autoSaveEl) {
+    autoSaveEl.value = punchList.autoSave !== false ? 'on' : 'off';
+  }
+  updatePunchListAutoSaveStatusUI();
+
   currentPunchListItems = [...(punchList.items || [])];
   renderPunchListItemsInForm();
   document.getElementById('punchListModal').classList.remove('hidden');
@@ -2510,6 +2902,7 @@ function addPunchListItemToForm() {
   };
   currentPunchListItems.push(newItem);
   renderPunchListItemsInForm();
+  triggerPunchListAutoSave();
 }
 
 function renderPunchListItemsInForm() {
@@ -2521,7 +2914,8 @@ function renderPunchListItemsInForm() {
       <div style="min-width: 30px; font-weight: bold; text-align: center;">${index + 1}.</div>
       <input type="text" value="${item.description}" placeholder="Item description" 
              style="flex: 1; padding: 0.5rem; border: 1px solid var(--gray-300); border-radius: 0.5rem;"
-             onchange="updatePunchListItem('${item.id}', this.value)">
+             oninput="updatePunchListItem('${item.id}', this.value); triggerPunchListAutoSave();"
+             onchange="updatePunchListItem('${item.id}', this.value); triggerPunchListAutoSave();">
       <button type="button" class="btn secondary-btn small-btn" 
               onclick="removePunchListItem('${item.id}')">Remove</button>
     </div>
@@ -2536,16 +2930,19 @@ function updatePunchListItem(id, description) {
 function removePunchListItem(id) {
   currentPunchListItems = currentPunchListItems.filter(i => i.id !== id);
   renderPunchListItemsInForm();
+  triggerPunchListAutoSave();
 }
 
 async function handleSavePunchList(e) {
-  e.preventDefault();
+  if (e) e.preventDefault();
+  if (punchListAutoSaveTimer) clearTimeout(punchListAutoSaveTimer);
   
   const name = document.getElementById('punchListName').value.trim();
   const description = document.getElementById('punchListDescription').value.trim();
   const visibility = document.getElementById('punchListVisibility').value;
   const punchListId = document.getElementById('punchListId').value;
   const fromTaskId = document.getElementById('punchListFromTaskId').value;
+  const autoSaveVal = document.getElementById('punchListAutoSave')?.value === 'on';
   
   if (!name) {
     alert('Please enter a punch list name');
@@ -2563,6 +2960,7 @@ async function handleSavePunchList(e) {
         name,
         description,
         visibility,
+        autoSave: autoSaveVal,
         items: currentPunchListItems,
         lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         lastUpdatedDate: date,
@@ -2570,7 +2968,6 @@ async function handleSavePunchList(e) {
       });
     } else {
       // Create new
-      // Get next ID (PL-XXXXXX)
       let nextNumber = 1;
       const maxPunchList = punchListsCache.reduce((max, pl) => {
         if (pl.punchListId && pl.punchListId.startsWith('PL-')) {
@@ -2587,6 +2984,7 @@ async function handleSavePunchList(e) {
         name,
         description,
         visibility,
+        autoSave: autoSaveVal,
         items: currentPunchListItems,
         taskId: fromTaskId || null,
         createdBy: currentUser.email,
@@ -4774,7 +5172,7 @@ window.togglePunchListItem = async function(punchListId, itemId, completed) {
 }
 
 window.archivePunchList = async function(punchListId) {
-  if (!confirm('Are you sure you want to archive this punch list?')) return;
+  if (!await customConfirm('Are you sure you want to archive this punch list?')) return;
   
   const now = new Date();
   const date = now.toISOString().split('T')[0];
@@ -4802,15 +5200,122 @@ window.restorePunchList = async function(punchListId) {
 }
 
 window.deletePunchList = async function(punchListId) {
-  if (!confirm('Are you sure you want to delete this punch list? This cannot be undone!')) return;
+  const punchList = punchListsCache.find(p => p.id === punchListId);
+  const title = punchList?.name || 'Punch List';
+  if (!await customConfirm(`Move "${title}" to Trash? (You can restore it within 30 days)`)) return;
   
-  await db.collection('groups').doc(currentGroup).collection('punchLists').doc(punchListId).delete();
-  alert('Punch list deleted successfully!');
+  try {
+    await moveToTrash('punchLists', punchListId, 'punchList', 'Punch List', title, punchList || {});
+    alert('Punch list moved to Trash.');
+  } catch (error) {
+    console.error('Delete punch list error:', error);
+    alert('Failed to move punch list to trash: ' + error.message);
+  }
 }
 
 // ===============================
 // Notes Functions
 // ===============================
+let noteAutoSaveTimer = null;
+let isNoteAutoSaving = false;
+
+function updateNoteAutoSaveStatusUI(customHtml) {
+  const statusEl = document.getElementById('noteAutoSaveStatus');
+  if (!statusEl) return;
+  if (customHtml) {
+    statusEl.innerHTML = customHtml;
+    return;
+  }
+  const autoSaveEl = document.getElementById('noteAutoSave');
+  if (autoSaveEl && autoSaveEl.value === 'off') {
+    statusEl.innerHTML = '<span style="color:var(--gray-400);"><i class="fas fa-pause-circle"></i> Off</span>';
+  } else {
+    statusEl.innerHTML = '<span style="color:var(--gray-500);"><i class="fas fa-check-circle" style="color:#10b981;"></i> Auto-save: On</span>';
+  }
+}
+
+function triggerNoteAutoSave() {
+  const autoSaveEl = document.getElementById('noteAutoSave');
+  if (!autoSaveEl || autoSaveEl.value !== 'on') return;
+
+  const name = document.getElementById('noteName')?.value?.trim();
+  if (!name) {
+    updateNoteAutoSaveStatusUI('<span style="color:var(--gray-400);">Name required to auto-save</span>');
+    return;
+  }
+
+  updateNoteAutoSaveStatusUI('<span style="color:var(--primary-600);"><i class="fas fa-circle-notch fa-spin"></i> Saving...</span>');
+
+  if (noteAutoSaveTimer) clearTimeout(noteAutoSaveTimer);
+  noteAutoSaveTimer = setTimeout(async () => {
+    if (isNoteAutoSaving) return;
+    const currentName = document.getElementById('noteName')?.value?.trim();
+    if (!currentName || document.getElementById('noteAutoSave')?.value !== 'on') return;
+
+    const visibility = document.getElementById('noteVisibility')?.value || 'private';
+    const description = document.getElementById('noteDescription')?.innerHTML || '';
+    let noteId = document.getElementById('noteId')?.value;
+
+    const now = new Date();
+    const date = now.toISOString().split('T')[0];
+    const time = now.toTimeString().split(' ')[0].substring(0, 5);
+
+    try {
+      isNoteAutoSaving = true;
+      if (noteId) {
+        // Update existing note
+        await db.collection('groups').doc(currentGroup).collection('notes').doc(noteId).update({
+          name: currentName,
+          visibility,
+          description,
+          autoSave: true,
+          lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          lastUpdatedDate: date,
+          lastUpdatedTime: time
+        });
+      } else {
+        // Create new note
+        let nextNumber = 1;
+        const maxNote = notesCache.reduce((max, note) => {
+          if (note.noteId && note.noteId.startsWith('NOTE-')) {
+            const num = parseInt(note.noteId.slice(5), 10);
+            return num > max ? num : max;
+          }
+          return max;
+        }, 0);
+        nextNumber = maxNote + 1;
+        const newNoteId = 'NOTE-' + String(nextNumber).padStart(6, '0');
+
+        const docRef = await db.collection('groups').doc(currentGroup).collection('notes').add({
+          noteId: newNoteId,
+          name: currentName,
+          visibility,
+          description,
+          autoSave: true,
+          createdBy: currentUser.email,
+          createdDate: date,
+          createdTime: time,
+          lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          lastUpdatedDate: date,
+          lastUpdatedTime: time,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Set noteId so subsequent auto-saves update rather than duplicate!
+        document.getElementById('noteId').value = docRef.id;
+        document.getElementById('noteModalTitle').textContent = 'Edit Note';
+      }
+
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      updateNoteAutoSaveStatusUI(`<span style="color:#10b981;" title="Auto-saved to cloud"><i class="fas fa-check-circle"></i> Saved ${timeStr}</span>`);
+    } catch (err) {
+      console.warn('Note auto-save error:', err);
+      updateNoteAutoSaveStatusUI('<span style="color:#ef4444;"><i class="fas fa-exclamation-triangle"></i> Save error</span>');
+    } finally {
+      isNoteAutoSaving = false;
+    }
+  }, 1200);
+}
 
 window.openNoteModal = function(noteId = null) {
   if (noteId) {
@@ -4821,22 +5326,36 @@ window.openNoteModal = function(noteId = null) {
     document.getElementById('noteName').value = note.name;
     document.getElementById('noteVisibility').value = note.visibility || 'private';
     document.getElementById('noteDescription').innerHTML = note.description || '';
+
+    const autoSaveEl = document.getElementById('noteAutoSave');
+    if (autoSaveEl) {
+      autoSaveEl.value = note.autoSave !== false ? 'on' : 'off';
+    }
+    updateNoteAutoSaveStatusUI();
   } else {
     document.getElementById('noteModalTitle').textContent = 'Create New Note';
     document.getElementById('noteForm').reset();
     document.getElementById('noteId').value = '';
     document.getElementById('noteDescription').innerHTML = '';
+
+    const autoSaveEl = document.getElementById('noteAutoSave');
+    if (autoSaveEl) {
+      autoSaveEl.value = 'on'; // default ON for each newly created note
+    }
+    updateNoteAutoSaveStatusUI('<span style="color:var(--gray-500);"><i class="fas fa-bolt" style="color:#eab308;"></i> Auto-save: On (Default)</span>');
   }
   document.getElementById('noteModal').classList.remove('hidden');
 }
 
 async function handleSaveNote(e) {
-  e.preventDefault();
+  if (e) e.preventDefault();
+  if (noteAutoSaveTimer) clearTimeout(noteAutoSaveTimer);
   
   const name = document.getElementById('noteName').value.trim();
   const visibility = document.getElementById('noteVisibility').value;
   const description = document.getElementById('noteDescription').innerHTML;
   const noteId = document.getElementById('noteId').value;
+  const autoSaveVal = document.getElementById('noteAutoSave')?.value === 'on';
   
   if (!name) {
     alert('Please enter a note name');
@@ -4854,6 +5373,7 @@ async function handleSaveNote(e) {
         name,
         visibility,
         description,
+        autoSave: autoSaveVal,
         lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         lastUpdatedDate: date,
         lastUpdatedTime: time
@@ -4877,6 +5397,7 @@ async function handleSaveNote(e) {
         name,
         visibility,
         description,
+        autoSave: autoSaveVal,
         createdBy: currentUser.email,
         createdDate: date,
         createdTime: time,
@@ -5151,10 +5672,17 @@ window.openViewNoteModal = function(noteId) {
 }
 
 window.deleteNote = async function(noteId) {
-  if (!confirm('Are you sure you want to delete this note? This cannot be undone!')) return;
+  const note = notesCache.find(n => n.id === noteId);
+  const title = note?.name || 'Note';
+  if (!await customConfirm(`Move "${title}" to Trash? (You can restore it within 30 days)`)) return;
   
-  await db.collection('groups').doc(currentGroup).collection('notes').doc(noteId).delete();
-  alert('Note deleted successfully!');
+  try {
+    await moveToTrash('notes', noteId, 'note', 'Note', title, note || {});
+    alert('Note moved to Trash.');
+  } catch (error) {
+    console.error('Delete note error:', error);
+    alert('Failed to move note to trash: ' + error.message);
+  }
 }
 
 function populateNoteCreatedByFilter() {
@@ -5341,7 +5869,7 @@ function loadUsersList() {
 }
 
 async function removeUser(email) {
-  if (!confirm('Are you sure you want to remove this user?')) return;
+  if (!await customConfirm(`Are you sure you want to remove user "${email}" from the group?`, { confirmText: 'Remove User', type: 'danger', isDanger: true })) return;
   
   try {
     await db.collection('groups').doc(currentGroup).collection('users').doc(email).delete();
@@ -5370,7 +5898,7 @@ async function confirmTransferAdmin() {
   }
   
   const newAdminUser = usersCache.find(u => u.email === newAdminEmail);
-  if (!confirm(`Are you sure you want to transfer Admin privileges to ${newAdminUser.name}? This action will swap roles and transfer all active responsibilities between both users.`)) {
+  if (!await customConfirm(`Are you sure you want to transfer Admin privileges to ${newAdminUser.name}? This action will swap roles and transfer all active responsibilities between both users.`, { confirmText: 'Transfer Admin', type: 'warning' })) {
     return;
   }
   
@@ -5760,21 +6288,19 @@ function editCategory(id) {
 }
 
 async function deleteCategory(id) {
-  if (!confirm('Are you sure you want to delete this category? This will not delete any tasks.')) {
+  const category = categoriesCache.find(c => c.id === id);
+  const title = category?.name || 'Category';
+  if (!await customConfirm(`Move category "${title}" to Trash? (You can restore it within 30 days. This will not delete any tasks.)`)) {
     return;
   }
   
   try {
-    const category = categoriesCache.find(c => c.id === id);
-    await db.collection('groups').doc(currentGroup).collection('categories').doc(id).delete();
-    
-    // Send notifications to assigned users
+    await moveToTrash('categories', id, 'category', 'Category', title, category || {});
     await notifyAffectedUsers('category', id, category?.name, null);
-    
-    alert('Category deleted successfully');
+    alert('Category moved to Trash.');
   } catch (error) {
     console.error('Delete category error:', error);
-    alert('Failed to delete category: ' + error.message);
+    alert('Failed to move category to trash: ' + error.message);
   }
 }
 
@@ -5783,21 +6309,19 @@ function editProject(id) {
 }
 
 async function deleteProject(id) {
-  if (!confirm('Are you sure you want to delete this project? This will not delete any tasks.')) {
+  const project = projectsCache.find(p => p.id === id);
+  const title = project?.name || 'Project';
+  if (!await customConfirm(`Move project "${title}" to Trash? (You can restore it within 30 days. This will not delete any tasks.)`)) {
     return;
   }
   
   try {
-    const project = projectsCache.find(p => p.id === id);
-    await db.collection('groups').doc(currentGroup).collection('projects').doc(id).delete();
-    
-    // Send notifications to assigned users
+    await moveToTrash('projects', id, 'project', 'Project', title, project || {});
     await notifyAffectedUsers('project', id, project?.name, null);
-    
-    alert('Project deleted successfully');
+    alert('Project moved to Trash.');
   } catch (error) {
     console.error('Delete project error:', error);
-    alert('Failed to delete project: ' + error.message);
+    alert('Failed to move project to trash: ' + error.message);
   }
 }
 
@@ -5978,4 +6502,240 @@ function loadIssues() {
       deleteIssue(issueId);
     });
   });
+}
+
+// ==========================================================================
+// Trash Bin System (Soft Delete, Restore, Permanent Delete & 30-Day Auto Cleanup)
+// ==========================================================================
+
+function escapeTrashHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+window.moveToTrash = async function(collectionName, docId, typeKey, itemType, title, data) {
+  if (!currentGroup) throw new Error('No active group selected');
+  const deletedTimestamp = Date.now();
+  const deletedAt = new Date().toISOString();
+  const deletedBy = currentUser?.email || 'Unknown';
+  const deletedByName = currentUser?.displayName || currentUser?.email || 'User';
+
+  const trashItem = {
+    originalCollection: collectionName,
+    originalId: docId,
+    typeKey: typeKey,
+    itemType: itemType,
+    title: title || 'Untitled',
+    data: data,
+    deletedAt: deletedAt,
+    deletedTimestamp: deletedTimestamp,
+    deletedBy: deletedBy,
+    deletedByName: deletedByName
+  };
+
+  await db.collection('groups').doc(currentGroup).collection('trash').add(trashItem);
+  await db.collection('groups').doc(currentGroup).collection(collectionName).doc(docId).delete();
+};
+
+window.restoreFromTrash = async function(trashDocId) {
+  const item = trashCache.find(t => t.id === trashDocId);
+  if (!item) return;
+
+  if (!await customConfirm(`Restore "${item.title}" back to ${item.itemType}s?`, { confirmText: 'Restore', type: 'info', isDanger: false })) return;
+
+  try {
+    // 1. Re-insert into original collection
+    await db.collection('groups').doc(currentGroup)
+      .collection(item.originalCollection)
+      .doc(item.originalId)
+      .set(item.data);
+
+    // 2. Remove from trash collection
+    await db.collection('groups').doc(currentGroup)
+      .collection('trash')
+      .doc(trashDocId)
+      .delete();
+
+    // 3. If CV, also update cvsCache locally
+    if (item.originalCollection === 'cvs' && typeof window.loadCVs === 'function') {
+      if (Array.isArray(window.cvsCache) && !window.cvsCache.find(c => c.id === item.originalId)) {
+        window.cvsCache.push(item.data);
+      }
+      window.loadCVs();
+    }
+
+    alert(`"${item.title}" restored successfully!`);
+  } catch (error) {
+    console.error('Restore error:', error);
+    alert('Failed to restore item: ' + error.message);
+  }
+};
+
+window.deletePermanentlyFromTrash = async function(trashDocId) {
+  const item = trashCache.find(t => t.id === trashDocId);
+  if (!item) return;
+
+  if (!await customConfirm(`Permanently delete "${item.title}"? This action CANNOT be undone!`, { confirmText: 'Delete Forever', type: 'danger', isDanger: true })) return;
+
+  try {
+    await db.collection('groups').doc(currentGroup)
+      .collection('trash')
+      .doc(trashDocId)
+      .delete();
+  } catch (error) {
+    console.error('Delete permanently error:', error);
+    alert('Failed to permanently delete item: ' + error.message);
+  }
+};
+
+window.emptyTrash = async function() {
+  if (!trashCache || trashCache.length === 0) {
+    alert('Trash is already empty.');
+    return;
+  }
+
+  if (!await customConfirm(`Are you sure you want to permanently delete all ${trashCache.length} item(s) in Trash? This action CANNOT be undone!`, { confirmText: 'Empty Trash', type: 'danger', isDanger: true })) return;
+
+  try {
+    const batch = db.batch();
+    const trashDocs = await db.collection('groups').doc(currentGroup).collection('trash').get();
+    trashDocs.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+    await batch.commit();
+    alert('Trash has been emptied.');
+  } catch (error) {
+    console.error('Empty trash error:', error);
+    alert('Failed to empty trash: ' + error.message);
+  }
+};
+
+window.filterTrash = function(filter) {
+  activeTrashFilter = filter;
+  document.querySelectorAll('.trash-filter-btn').forEach(btn => {
+    if (btn.dataset.trashFilter === filter) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+  renderTrashList();
+};
+
+function updateTrashBadgeCount() {
+  const countEl = document.getElementById('trashItemCount');
+  if (countEl) {
+    const total = trashCache.length;
+    countEl.textContent = total === 1 ? '1 item in trash' : `${total} items in trash`;
+  }
+}
+
+function getTrashCountdownInfo(deletedTimestamp, deletedAt) {
+  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+  const timestamp = deletedTimestamp || (deletedAt ? new Date(deletedAt).getTime() : Date.now());
+  const elapsed = Date.now() - timestamp;
+  const remainingMs = THIRTY_DAYS_MS - elapsed;
+  const daysLeft = Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
+  
+  if (daysLeft <= 0) {
+    return { text: 'Expires today', isUrgent: true };
+  } else if (daysLeft === 1) {
+    return { text: 'Expires in 1 day', isUrgent: true };
+  } else if (daysLeft <= 5) {
+    return { text: `Expires in ${daysLeft} days`, isUrgent: true };
+  } else {
+    return { text: `Expires in ${daysLeft} days`, isUrgent: false };
+  }
+}
+
+function renderTrashList() {
+  const container = document.getElementById('trashList');
+  if (!container) return;
+
+  updateTrashBadgeCount();
+
+  const filtered = activeTrashFilter === 'all'
+    ? trashCache
+    : trashCache.filter(item => item.typeKey === activeTrashFilter);
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div class="trash-empty-state">
+        <i class="fas fa-trash-alt"></i>
+        <h3 style="font-size:1.1rem; color:var(--gray-600); font-weight:600;">Trash is empty</h3>
+        <p style="margin-top:0.5rem; font-size:0.875rem;">
+          ${activeTrashFilter === 'all' ? 'Deleted items will appear here and remain for 30 days.' : `No deleted ${activeTrashFilter}s in trash.`}
+        </p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = filtered.map(item => {
+    const deletedTimeStr = item.deletedAt ? new Date(item.deletedAt).toLocaleString() : 'Unknown date';
+    const countdownInfo = getTrashCountdownInfo(item.deletedTimestamp, item.deletedAt);
+    const itemType = item.itemType || item.typeKey || 'Item';
+    const typeKey = item.typeKey || 'task';
+    const title = escapeTrashHtml(item.title || 'Untitled');
+    const deletedBy = escapeTrashHtml(item.deletedByName || item.deletedBy || 'User');
+
+    return `
+      <div class="trash-card" id="trash_item_${item.id}">
+        <div>
+          <div class="trash-card-header">
+            <h4 class="trash-card-title">${title}</h4>
+            <span class="trash-badge ${typeKey}">${itemType}</span>
+          </div>
+          <div class="trash-card-meta" style="margin-top: 0.75rem;">
+            <div><i class="fas fa-user" style="width:14px; color:var(--gray-400);"></i> Deleted by: ${deletedBy}</div>
+            <div><i class="fas fa-calendar-alt" style="width:14px; color:var(--gray-400);"></i> Deleted: ${deletedTimeStr}</div>
+            <div class="trash-countdown ${countdownInfo.isUrgent ? 'warning' : ''}">
+              <i class="fas fa-hourglass-half" style="width:14px;"></i> ${countdownInfo.text}
+            </div>
+          </div>
+        </div>
+        <div class="trash-card-actions">
+          <button class="btn secondary-btn" onclick="window.restoreFromTrash('${item.id}')" title="Restore this item">
+            <i class="fas fa-undo"></i> Restore
+          </button>
+          <button class="btn secondary-btn" style="color:var(--danger-600); border-color:var(--danger-200); background:#fff1f2;" onclick="window.deletePermanentlyFromTrash('${item.id}')" title="Delete permanently">
+            <i class="fas fa-trash-alt"></i> Delete Forever
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+let isCleaningTrash = false;
+async function cleanupExpiredTrash(items) {
+  if (isCleaningTrash || !currentGroup || !items || items.length === 0) return;
+  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  const expiredDocs = items.filter(item => {
+    const timestamp = item.deletedTimestamp || (item.deletedAt ? new Date(item.deletedAt).getTime() : 0);
+    return timestamp > 0 && (now - timestamp) > THIRTY_DAYS_MS;
+  });
+
+  if (expiredDocs.length === 0) return;
+
+  isCleaningTrash = true;
+  try {
+    const batch = db.batch();
+    expiredDocs.forEach(item => {
+      const ref = db.collection('groups').doc(currentGroup).collection('trash').doc(item.id);
+      batch.delete(ref);
+    });
+    await batch.commit();
+    console.log(`Cleaned up ${expiredDocs.length} expired trash items (>30 days).`);
+  } catch (e) {
+    console.warn('Error during automatic trash cleanup:', e);
+  } finally {
+    isCleaningTrash = false;
+  }
 }

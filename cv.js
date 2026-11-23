@@ -70,6 +70,7 @@
       title: title,
       visibility: 'private', // 'private' or 'public'
       template: 'modern', // 'modern', 'classic', 'minimal', 'ats'
+      autoSave: true, // Default auto-save ON for each newly created CV
       createdBy: userEmail,
       createdByName: userName,
       createdAt: new Date().toISOString(),
@@ -426,7 +427,7 @@
             
             <div class="cv-card-meta">
               <div><i class="fas fa-envelope" style="width: 14px; color: var(--gray-400);"></i> ${escapeHtml(cv.personal?.email || 'No email')}</div>
-              <div><i class="fas fa-user-pen" style="width: 14px; color: var(--gray-400);"></i> Created by: ${escapeHtml(cv.createdByName || cv.createdBy || 'User')}</div>
+              <div><i class="fas fa-user-pen" style="width: 14px; color: var(--gray-400);"></i> Created by: ${escapeHtml(cv.personal?.fullName || cv.createdByName || cv.createdBy || 'User')}</div>
               <div><i class="fas fa-clock" style="width: 14px; color: var(--gray-400);"></i> Last modified: ${updatedDate}</div>
             </div>
           </div>
@@ -492,10 +493,13 @@
     const titleInput = document.getElementById('cvDocTitle');
     const visSelect = document.getElementById('cvDocVisibility');
     const tplSelect = document.getElementById('cvDocTemplate');
+    const autoSaveSelect = document.getElementById('cvDocAutoSave');
 
     if (titleInput) titleInput.value = currentCv.title || 'Untitled CV';
     if (visSelect) visSelect.value = currentCv.visibility || 'private';
     if (tplSelect) tplSelect.value = currentCv.template || 'modern';
+    if (autoSaveSelect) autoSaveSelect.value = currentCv.autoSave !== false ? 'on' : 'off';
+    updateCvAutoSaveStatusUI();
 
     switchCvSubView('editor');
     renderSectionManager();
@@ -504,7 +508,9 @@
   }
 
   window.backToCvList = function () {
+    if (cvAutoSaveTimer) clearTimeout(cvAutoSaveTimer);
     if (currentCv) {
+      readTopBarValues();
       saveCvToStorage(currentCv);
     }
     switchCvSubView('list');
@@ -513,8 +519,10 @@
   // Save current CV in app
   window.saveCurrentCvInApp = async function () {
     if (!currentCv) return;
+    if (cvAutoSaveTimer) clearTimeout(cvAutoSaveTimer);
     readTopBarValues();
     await saveCvToStorage(currentCv);
+    updateCvAutoSaveStatusUI('<span style="color:#10b981;"><i class="fas fa-check-circle"></i> Saved</span>');
     showFloatingNotification('CV saved successfully!');
     renderCvListView();
   };
@@ -524,11 +532,66 @@
     const title = document.getElementById('cvDocTitle')?.value?.trim();
     const visibility = document.getElementById('cvDocVisibility')?.value;
     const template = document.getElementById('cvDocTemplate')?.value;
+    const autoSave = document.getElementById('cvDocAutoSave')?.value;
 
     if (title) currentCv.title = title;
     if (visibility) currentCv.visibility = visibility;
     if (template) currentCv.template = template;
+    if (autoSave) currentCv.autoSave = (autoSave === 'on');
   }
+
+  // ==========================================================================
+  // Auto-Save Controller (Debounced while working, default ON)
+  // ==========================================================================
+  let cvAutoSaveTimer = null;
+  let isCvAutoSaving = false;
+
+  function updateCvAutoSaveStatusUI(customHtml) {
+    const statusEl = document.getElementById('cvAutoSaveStatus');
+    if (!statusEl) return;
+    if (customHtml) {
+      statusEl.innerHTML = customHtml;
+      return;
+    }
+    if (currentCv && currentCv.autoSave === false) {
+      statusEl.innerHTML = '<span style="color:var(--gray-400);"><i class="fas fa-pause-circle"></i> Off</span>';
+    } else {
+      statusEl.innerHTML = '<span style="color:var(--gray-500);"><i class="fas fa-check-circle" style="color:#10b981;"></i> On</span>';
+    }
+  }
+
+  function triggerCvAutoSave() {
+    if (!currentCv || currentCv.autoSave === false) return;
+
+    updateCvAutoSaveStatusUI('<span style="color:var(--primary-600);"><i class="fas fa-circle-notch fa-spin"></i> Saving...</span>');
+
+    if (cvAutoSaveTimer) clearTimeout(cvAutoSaveTimer);
+    cvAutoSaveTimer = setTimeout(async () => {
+      if (!currentCv || currentCv.autoSave === false || isCvAutoSaving) return;
+      try {
+        isCvAutoSaving = true;
+        readTopBarValues();
+        await saveCvToStorage(currentCv);
+        const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        updateCvAutoSaveStatusUI(`<span style="color:#10b981;" title="Auto-saved to cloud"><i class="fas fa-check-circle"></i> Saved ${timeStr}</span>`);
+      } catch (err) {
+        console.warn('CV auto-save error:', err);
+        updateCvAutoSaveStatusUI('<span style="color:#ef4444;"><i class="fas fa-exclamation-triangle"></i> Save error</span>');
+      } finally {
+        isCvAutoSaving = false;
+      }
+    }, 1200);
+  }
+
+  window.onCvAutoSaveChange = function () {
+    readTopBarValues();
+    if (currentCv.autoSave === false) {
+      if (cvAutoSaveTimer) clearTimeout(cvAutoSaveTimer);
+      updateCvAutoSaveStatusUI();
+    } else {
+      triggerCvAutoSave();
+    }
+  };
 
   // ==========================================================================
   // Section Reordering & Hide/Show Manager
@@ -1931,6 +1994,7 @@
 
     previewContainer.innerHTML = cvHtml;
     applyZoom();
+    triggerCvAutoSave();
   }
 
   // Zoom controls
@@ -2952,8 +3016,24 @@
 
   // Delete CV
   window.deleteCvById = async function (cvId) {
-    if (!confirm('Are you sure you want to delete this CV? This action cannot be undone.')) {
+    const cv = (window.cvsCache || []).find(c => c.id === cvId);
+    if (!cv) return;
+    const confirmFn = window.customConfirm || window.confirm;
+    if (!await confirmFn(`Move "${cv.title || 'Untitled CV'}" to Trash? (You can restore it within 30 days)`)) {
       return;
+    }
+    const cvTitle = cv.title || cv.personal?.fullName || 'Untitled CV';
+    if (typeof window.moveToTrash === 'function' && window.currentGroup) {
+      try {
+        await window.moveToTrash('cvs', cvId, 'cv', 'CV', cvTitle, cv);
+        window.cvsCache = (window.cvsCache || []).filter(c => c.id !== cvId);
+        saveLocalCVs(window.cvsCache);
+        showFloatingNotification('CV moved to Trash.');
+        renderCvListView();
+        return;
+      } catch (err) {
+        console.warn('Could not move CV to trash in Firestore:', err);
+      }
     }
     await deleteCvFromStorage(cvId);
     showFloatingNotification('CV deleted.');
@@ -3021,8 +3101,8 @@
       }
     });
 
-    // Top bar inputs change triggers live preview update
-    ['cvDocTitle', 'cvDocVisibility', 'cvDocTemplate'].forEach(id => {
+    // Top bar inputs change triggers live preview update and auto-save
+    ['cvDocTitle', 'cvDocVisibility', 'cvDocTemplate', 'cvDocAutoSave'].forEach(id => {
       const el = document.getElementById(id);
       if (el) {
         el.addEventListener('input', updateLivePreview);
