@@ -779,15 +779,15 @@
   window.createNewCvPrompt = async function () {
     const title = typeof window.customPrompt === 'function'
       ? await window.customPrompt('Give your new CV a name. You can rename it anytime from the editor.', {
-          title: 'Create New CV',
-          label: 'CV Title',
-          defaultValue: 'My Professional CV',
-          placeholder: 'e.g. Network Engineer CV – 2026',
-          confirmText: 'Create CV',
-          icon: 'fas fa-file-circle-plus',
-          requiredMessage: 'Please enter a title for your CV.',
-          maxLength: 120
-        })
+        title: 'Create New CV',
+        label: 'CV Title',
+        defaultValue: 'My Professional CV',
+        placeholder: 'e.g. Network Engineer CV – 2026',
+        confirmText: 'Create CV',
+        icon: 'fas fa-file-circle-plus',
+        requiredMessage: 'Please enter a title for your CV.',
+        maxLength: 120
+      })
       : prompt('Enter a title for your new CV:', 'My Professional CV');
     if (title === null) return;
 
@@ -2155,10 +2155,11 @@
     const listHtml = langList.map((lang, index) => {
       const isFirst = index === 0;
       const isLast = index === langList.length - 1;
+      const profDisplay = (lang.proficiency || '').trim();
       return `
         <div class="cv-item-box">
           <div class="cv-item-box-header">
-            <div class="cv-item-box-title">#${index + 1}: ${escapeHtml(lang.language || 'Language')} (${escapeHtml(lang.proficiency || 'Proficiency')})</div>
+            <div class="cv-item-box-title">#${index + 1}: ${escapeHtml(lang.language || 'Language')}${profDisplay ? ` (${escapeHtml(profDisplay)})` : ' (No proficiency)'}</div>
             <div class="cv-item-box-tools">
               ${!isFirst ? `<button class="cv-chip-btn" onclick="window.moveLangItem(${index}, -1)" title="Move Up"><i class="fas fa-arrow-up"></i></button>` : ''}
               ${!isLast ? `<button class="cv-chip-btn" onclick="window.moveLangItem(${index}, 1)" title="Move Down"><i class="fas fa-arrow-down"></i></button>` : ''}
@@ -2172,14 +2173,24 @@
               <input type="text" value="${escapeHtml(lang.language || '')}" placeholder="e.g. English / German / Spanish" oninput="window.updateLangField('${lang.id}', 'language', this.value)">
             </div>
             <div class="cv-form-group">
-              <label>Proficiency Level</label>
-              <select onchange="window.updateLangField('${lang.id}', 'proficiency', this.value)">
-                <option value="Native / Bilingual" ${lang.proficiency === 'Native / Bilingual' ? 'selected' : ''}>Native / Bilingual</option>
-                <option value="Full Professional" ${lang.proficiency === 'Full Professional' ? 'selected' : ''}>Full Professional</option>
-                <option value="Professional Working" ${lang.proficiency === 'Professional Working' ? 'selected' : ''}>Professional Working</option>
-                <option value="Conversational" ${lang.proficiency === 'Conversational' ? 'selected' : ''}>Conversational</option>
-                <option value="Elementary" ${lang.proficiency === 'Elementary' ? 'selected' : ''}>Elementary</option>
-              </select>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.25rem;">
+                <label style="margin:0;">Proficiency Level <span style="font-size:0.75rem; color:var(--gray-500); font-weight:normal;">(Optional)</span></label>
+                ${profDisplay ? `
+                  <button type="button" style="font-size:0.75rem; color:var(--gray-500); background:none; border:none; cursor:pointer; text-decoration:underline;" onclick="window.updateLangField('${lang.id}', 'proficiency', ''); renderAllSectionForms();" title="Clear / Hide proficiency">Hide</button>
+                ` : ''}
+              </div>
+              <input type="text" list="langProficiencySuggestions" value="${escapeHtml(lang.proficiency || '')}" placeholder="Optional: e.g. Native, Fluent, C1, Basic (or leave empty)" oninput="window.updateLangField('${lang.id}', 'proficiency', this.value)">
+              <datalist id="langProficiencySuggestions">
+                <option value="Native / Bilingual"></option>
+                <option value="Full Professional"></option>
+                <option value="Professional Working"></option>
+                <option value="Fluent"></option>
+                <option value="Advanced (C1 / C2)"></option>
+                <option value="Conversational (B1 / B2)"></option>
+                <option value="Elementary / Basic (A1 / A2)"></option>
+                <option value="Mother Tongue"></option>
+                <option value="Working Knowledge"></option>
+              </datalist>
             </div>
           </div>
         </div>
@@ -2200,7 +2211,7 @@
     currentCv.languages.push({
       id: 'lang_' + Math.random().toString(36).substr(2, 6),
       language: '',
-      proficiency: 'Professional Working'
+      proficiency: ''
     });
     renderAllSectionForms();
     updateLivePreview();
@@ -2540,7 +2551,7 @@
         const meta = [];
         if (cert.organization) meta.push(escapeHtml(cert.organization));
         if (cert.location) meta.push(`<i class="fas fa-map-marker-alt" style="font-size:7.5pt;"></i> ${escapeHtml(cert.location)}`);
-        if (cert.duration && cert.issueDate) meta.push(`Completed: ${escapeHtml(cert.issueDate)}`);
+        if (cert.duration && cert.issueDate) meta.push(`Issue Date: ${escapeHtml(cert.issueDate)}`);
         if (cert.credentialId) meta.push(`ID: ${escapeHtml(cert.credentialId)}`);
         if (cert.expirationDate) meta.push(`Expires: ${escapeHtml(cert.expirationDate)}`);
         return `
@@ -2666,11 +2677,23 @@
 
     // 10. Languages
     if (cv.languages && cv.languages.length > 0) {
-      const langsHtml = cv.languages.map(lang => `
-        <span style="display:inline-block;margin-right:12px;font-size:9pt;">
-          <strong>${escapeHtml(lang.language)}:</strong> <span style="color:#555;">${escapeHtml(lang.proficiency)}</span>
-        </span>
-      `).join('');
+      const langsHtml = cv.languages.map(lang => {
+        const langName = escapeHtml(lang.language || '');
+        const prof = (lang.proficiency || '').trim();
+        if (prof) {
+          return `
+            <span style="display:inline-block;margin-right:14px;margin-bottom:3px;font-size:9pt;">
+              <strong>${langName}:</strong> <span style="color:#555;">${escapeHtml(prof)}</span>
+            </span>
+          `;
+        } else {
+          return `
+            <span style="display:inline-block;margin-right:14px;margin-bottom:3px;font-size:9pt;">
+              <strong>${langName}</strong>
+            </span>
+          `;
+        }
+      }).join('');
 
       renderedSections.languages = `
         <div class="cv-sec-block cv-avoid-break">
@@ -2903,9 +2926,9 @@
       sheet.style.width = `${captureW}mm`;
       sheet.style.maxWidth = `${captureW}mm`;
       sheet.style.boxSizing = 'border-box';
-      // Page margins are applied by jsPDF; the sheet only carries the side gutter, so the
-      // text column is exactly the printable width chosen in Page Setup.
-      sheet.style.padding = `0 ${G}mm`;
+      // Page margins are applied by jsPDF; the sheet carries the side gutter plus bottom buffer
+      // so the last lines and font descenders are never cropped at the end of pages.
+      sheet.style.padding = `0 ${G}mm 14mm ${G}mm`;
       sheet.style.minHeight = 'auto';
       sheet.style.overflow = 'visible';
     }
@@ -2929,14 +2952,14 @@
         html2canvas: {
           scale: 2,
           useCORS: true,
-          letterRendering: true,
+          letterRendering: false,
           scrollX: 0,
           scrollY: 0,
           logging: false
         },
         jsPDF: { unit: 'mm', format: ps.size, orientation: ps.orientation },
         pagebreak: {
-          mode: ['css', 'legacy'],
+          mode: ['avoid-all', 'css', 'legacy'],
           before: '.cv-page-break-before, .html2pdf__page-break',
           after: '.cv-page-break-after',
           avoid: [
@@ -3141,7 +3164,7 @@
                 ${(() => {
                   const m = [];
                   if (cert.location) m.push(`Location: ${escapeHtml(cert.location)}`);
-                  if (cert.duration && cert.issueDate) m.push(`Completed: ${escapeHtml(cert.issueDate)}`);
+                  if (cert.duration && cert.issueDate) m.push(`Issue Date: ${escapeHtml(cert.issueDate)}`);
                   if (cert.credentialId) m.push(`Credential ID: ${escapeHtml(cert.credentialId)}`);
                   return m.length ? `<div class="sub-meta">${m.join(' &bull; ')}</div>` : '';
                 })()}
@@ -3243,7 +3266,11 @@
               <div class="sec-heading">LANGUAGES</div>
               <div class="rule"></div>
               <p style="font-size: 10pt;">
-                ${cvData.languages.map(l => `<strong>${escapeHtml(l.language)}:</strong> ${escapeHtml(l.proficiency)}`).join(' &bull; ')}
+                ${cvData.languages.map(l => {
+                  const name = escapeHtml(l.language || '');
+                  const prof = (l.proficiency || '').trim();
+                  return prof ? `<strong>${name}:</strong> ${escapeHtml(prof)}` : `<strong>${name}</strong>`;
+                }).join(' &bull; ')}
               </p>
             `;
           }

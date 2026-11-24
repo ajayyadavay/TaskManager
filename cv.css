@@ -646,6 +646,32 @@
   overflow-wrap: break-word;
 }
 
+/* ==========================================================================
+   Professional Justified Content Alignment
+   ========================================================================== */
+.cv-a4-sheet p,
+.cv-a4-sheet li,
+.cv-bullet-item,
+.cv-bullets li,
+.cv-sec-block p,
+.cv-entry-desc,
+.cv-entry-details {
+  text-align: justify;
+  text-justify: inter-word;
+  text-align-last: left;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  -ms-hyphens: auto;
+  word-spacing: -0.01em;
+}
+
+/* Line descender protection against canvas cropping */
+.cv-bullet-item,
+.cv-a4-sheet p,
+.cv-a4-sheet li {
+  padding-bottom: 2px;
+}
+
 .cv-sheet-footer {
   margin-top: 28px;
   padding-top: 8px;
@@ -1482,7 +1508,8 @@
    ========================================================================== */
 .cv-a4-sheet.cv-pdf-export,
 #cvPrintArea .cv-a4-sheet {
-  overflow: visible;
+  overflow: visible !important;
+  padding-bottom: 14mm !important;
 }
 
 .cv-a4-sheet.cv-pdf-export .cv-contact-item,
